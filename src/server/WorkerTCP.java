@@ -11,6 +11,7 @@ import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class WorkerTCP implements Runnable {
@@ -31,18 +32,15 @@ public class WorkerTCP implements Runnable {
     public void run() {
         try {
             if (k.isAcceptable()) { //se è il channel sul quale accetto le connessioni
-                System.out.println("booooh");
                 accept(k);
             } else if (k.isReadable()) {
-                System.out.println("booooh1");
                 String command = read(k);
                 System.out.println(command);
                 String response = "";//ManagerLogin.login(cred[0], cred[1]);
-                response=manageCommand(command, k);
+                response=manageCommand(command, k)+"\n";
                 System.out.println(response);
                 send(k, response);
                 //System.out.println("boh");
-
 
             }
         } catch (IOException e) {
@@ -75,10 +73,23 @@ public class WorkerTCP implements Runnable {
                 //parola nick token parola traduzione
                 //return parola();
                 break;
+            case "GET":
+                return get(tokens);
+
             default:
                 break;
         }
         return null;
+    }
+
+    private String get(String[] tokens) {
+        if(tokens[4].equals("FRIENDS")){
+            StringBuilder response= new StringBuilder("OK ");
+            Iterator<String> it=utenti.getPending(tokens[1]);
+            while(it.hasNext()) response.append(it.next());
+            return response.toString();
+        }
+        return "NOK";
     }
 
     /**
@@ -87,8 +98,9 @@ public class WorkerTCP implements Runnable {
      * @return token di login se la richiesta è corretta
      */
     public String login(String[] tokens, SelectionKey k){
+        //todo al login mostrare le nuove richieste di amicizia in sospeso (o contatore)
         try{
-            return "OK "+utenti.loginUtente(tokens[1], tokens[2], k);
+            return "OK "+utenti.loginUtente(tokens[1], tokens[2], k)+" "+utenti.getPendingSize(tokens[1]);
 
         } catch (UserAlreadyLogged ex) {
             return "NOK UserAlreadyLogged";
@@ -116,32 +128,106 @@ public class WorkerTCP implements Runnable {
         }
     }
 
+    /**
+     * inoltra la richiesta di amicizia a friend
+     * @param nick
+     * @param friend
+     * @return false se non la riesce a chiedere online
+     */
+    public boolean richiediAmicizia(String nick, String friend){
+        //todo se ce l'ho tra i pending l'accetto direttamente
+        if(utenti.exists(friend) && !friend.equals(nick)) {
+            if(utenti.getUtente(friend).addPending(nick)) {
+
+                if (utenti.isLogged(friend)) { //se è loggato gliela mando
+                    // (lo aggiungo lo stesso alla pending?)
+                    SelectionKey kFriend = utenti.getUtente(friend).getK();
+                    //AMICIZIA nick token(friend) RICHIESTA
+                    String response = "AMICIZIA " + nick + " " + utenti.getUtente(friend).getToken() + " RICHIESTA \n";
+                    try {
+                        while (utenti.isLogged(friend)) {
+
+                            send(kFriend, response);
+                            break;
+
+                        }
+
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        return false;
+                    }
+                    return true;
+
+                } else {
+
+                    return false;
+                }
+            }
+            else{
+                utenti.aggiungiAmicizia(nick, friend);
+                return true;
+            }
+        }
+        else{
+            throw new UserNotExists();
+        }
+    }
+
+    public boolean rispondiAmicizia(String nick, String friend){
+
+        if(utenti.exists(friend)) {
+            utenti.getUtente(friend).addPending(nick);
+            if (utenti.isLogged(friend)) { //se è loggato gliela mando
+                // (lo aggiungo lo stesso alla pending?)
+                SelectionKey kFriend = utenti.getUtente(friend).getK();
+                while(true) {
+                    if (k.isWritable()) break;
+                }
+                //AMICIZIA nick token(friend) RICHIESTA
+                String response = "AMICIZIA " + nick + " " + utenti.getUtente(friend).getToken() + " RICHIESTA";
+                try {
+                    send(kFriend, response);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                    return false;
+                }
+                return true;
+
+            } else {
+                //aggiungi alla lista delle richieste pendenti se offline
+                //todo se utente non esiste
+
+                return true;
+            }
+        }
+        else{
+            throw new UserNotExists();
+        }
+    }
+
     public String amicizia(String[] tokens){
 
         if (utenti.validateToken(tokens[1], tokens[2])){
             switch(tokens[4]){
-                case "richiedi":
-                    if(utenti.exists(tokens[3])) {
-                        if (utenti.isLogged(tokens[3])) {
-                            SelectionKey k = utenti.getUtente(tokens[3]).getK();
-                            //TODO invia richiesta
-                        } else {
-                            //aggiungi alla lista delle richieste pendenti se offline
-                            //todo se utente non esiste
-                            utenti.getUtente(tokens[3]).addPending(tokens[1]);
-                        }
-                    }
+                case "RICHIESTA":
+                    //inoltra la richiesta all'altro
+                    richiediAmicizia(tokens[1], tokens[3]);
                     break;
-                case "accetta":
+                case "ACCETTA":
+                    //rimuovo dalla pending
+                    //l'altro ha accettato, crea il legame e inoltra l'amicizia
                     try{
-                        utenti.aggiungiAmico(tokens[1], tokens[3]);
+                        utenti.removePendingFriend(tokens[1], tokens[3]);
+                        utenti.aggiungiAmicizia(tokens[1], tokens[3]);
 
                     }catch (UserNotExists ex){
                         return "NOK UserNotExists";
                     }
                     //todo invia richiesta accettata
                     break;
-                case "rifiuta":
+                case "RIFIUTA":
+                    //rimuovo dalla pending
+                    //l'altro non ha accettato, inoltra il rifiuto
                     //todo gestione getutente null
                     utenti.getUtente(tokens[1]).removePending(tokens[3]);
                     //TODO invia rifiuto
@@ -208,15 +294,19 @@ public class WorkerTCP implements Runnable {
      * @throws IOException
      */
     public void send(SelectionKey k, String response) throws IOException {
+        //todo send scrittura multiplo di BUFFLEN
         SocketChannel client = (SocketChannel) k.channel();
         ByteBuffer buffer = (ByteBuffer) k.attachment();
         int written = 0;
-        //todo cosa risponde ? creo un token?
+        //todo align response to kBUFFLEN
+        response.length();
         byte[] b = response.getBytes();
         while ((b.length - written) > 0) { //ciclo fino a che non ho scritto tutto
             if ((b.length - written) % BUFFLEN != 0)
                 buffer.put(Arrays.copyOfRange(b, written, (written) + ((b.length - written) % BUFFLEN)));
             else buffer.put(Arrays.copyOfRange(b, written, (written) + BUFFLEN)); //copio una parte
+
+
             buffer.flip();
             int w = 0;
             while (w < buffer.limit()) {

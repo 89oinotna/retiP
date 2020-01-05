@@ -20,6 +20,7 @@ public class ServerTCP implements Runnable {
     private ExecutorService executor;
     private Utenti utenti;
     private ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
+    // mi serve perchè la select potrebbe restituirmi la stessa key mentre la sto gestendo nel worker
 
     public ServerTCP(int port, Utenti _utenti) {
         try {

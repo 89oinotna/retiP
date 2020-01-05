@@ -43,18 +43,19 @@ public class Utente {
 
     private String token;
 
-    public Utente(String _nickname, String _password) {
+    public Utente(String _nickname, String _password, String _token) {
         nickname = _nickname;
         password = _password;
         punteggio = 0;
         logged = true; //si logga alla registrazione
         amici = new ConcurrentHashMap<>();
         pendingRequest=new ConcurrentHashMap<>();
-        token="";
+        token=_token;
     }
 
     public Utente(JSONObject utente) {
         amici = new ConcurrentHashMap<>();
+        pendingRequest=new ConcurrentHashMap<>();
         nickname = utente.get("nickname").toString();
         password = utente.get("password").toString();
         punteggio = Integer.parseInt(utente.get("punteggio").toString());
@@ -65,7 +66,7 @@ public class Utente {
         }
         JSONArray pendingJSON = (JSONArray) utente.get("pending");
         for (int i = 0; i < pendingJSON.size(); i++) {
-            amici.put(pendingJSON.get(i).toString(), pendingJSON.get(i).toString());
+            pendingRequest.put(pendingJSON.get(i).toString(), pendingJSON.get(i).toString());
         }
         token="";
     }
@@ -101,10 +102,10 @@ public class Utente {
 
     public void logIn(String _token) {
 
-        if (!logged) {
+
             logged = true;
             token=_token;
-        }
+
 
     }
 
@@ -149,8 +150,21 @@ public class Utente {
         return json;
     }
 
+    /**
+     * aggiunge alla pending list degli amici
+     * @param nick
+     * @return true se non era presente false altrimenti
+     */
+    public boolean addPending(String nick) {
+        return (pendingRequest.putIfAbsent(nick, nick))==null;
+    }
 
-    public void addPending(String nick) {
-        pendingRequest.put(nick, nick);
+
+    public int getPendingSize() {
+        return pendingRequest.size();
+    }
+
+    public Iterator<String> getPending() {
+        return pendingRequest.keySet().iterator();
     }
 }

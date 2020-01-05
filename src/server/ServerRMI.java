@@ -35,7 +35,7 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
         try {
             return "OK "+utenti.registraUtente(nickname, password);
         } catch (UserAlreadyExists e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             return "NOK UserAlreadyExists";
         }
 

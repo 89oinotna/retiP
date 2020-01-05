@@ -32,9 +32,10 @@ public class Utenti implements Serializable {
     }
 
     public String registraUtente(String nick, String pw) throws UserAlreadyExists {
-        if ((utenti.putIfAbsent(nick, new Utente(nick, pw))) != null) throw new UserAlreadyExists();
+        String token=generateToken(nick, pw);
+        if ((utenti.putIfAbsent(nick, new Utente(nick, pw, token))) != null) throw new UserAlreadyExists();
         else {
-            return generateToken(nick, pw);
+            return token;
         }
     }
 
@@ -115,7 +116,7 @@ public class Utenti implements Serializable {
      * @param nick
      * @param friend
      */
-    public void aggiungiAmico(String nick, String friend) {
+    public void aggiungiAmicizia(String nick, String friend) {
         if (utenti.get(friend) == null) throw new UserNotExists();
         //aggiorno la lista di nick
         utenti.computeIfPresent(nick, (key, oldU) -> {
@@ -186,5 +187,15 @@ public class Utenti implements Serializable {
 
     public boolean exists(String nick) {
         return utenti.get(nick)!=null;
+    }
+
+    public void removePendingFriend(String nick, String friend) {
+        utenti.get(friend).removePending(nick);
+    }
+    public int getPendingSize(String nick){return utenti.get(nick).getPendingSize();}
+
+    public Iterator<String> getPending(String nick) {
+        return utenti.get(nick).getPending();
+
     }
 }

@@ -131,14 +131,14 @@ public class Server {
          * test aggiunta amico
          */
         try {
-            this.u.aggiungiAmico("antonio", "pasquale");
+            this.u.aggiungiAmicizia("antonio", "pasquale");
         }   //amico non esiste
         catch (UserNotExists e) {
             i++;
             assert (i == 2);
         }
 
-        this.u.aggiungiAmico("antonio", "alfredo"); //amico esistente
+        this.u.aggiungiAmicizia("antonio", "alfredo"); //amico esistente
 
         /**
          * test punteggio
