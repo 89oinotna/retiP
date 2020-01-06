@@ -24,7 +24,7 @@ public class Client {
         return logged;
     }
 
-    public static void main(String[] args) {
+    /*public static void main(String[] args) {
         String scelta;
         Client c=new Client();
         c.nbIO=new NonBlockingIO(c.sc);
@@ -38,19 +38,26 @@ public class Client {
                 if(c.isLogged()) c.menuIn();
 
             }
-            String r="";
+            String r=null;
 
             //ciclo che controlla se ho ricevuto una richiesta di amicizia o
             //è stata selezionata una voce dal menu
-            while (c.isLogged() && (r=c.tcp.read())==null /*&& !udp request sfida*/) {
-                //todo migliorare in qualche modo?
-                if((scelta=c.nbIO.getLine())!=null){
+            /*
+     */
+            //while (c.isLogged() && (r=c.tcp.read())==null /*&& !udp request sfida*/) {
+                //todo migliorare in qualche modo? (boh devo controllare troppe cose)
+                /*if((scelta=c.nbIO.getLine())!=null){
                     c.manageSceltaIn(scelta);
                     c.menuIn();
                 }
 
 
             }
+            while(r!=null){
+                //manageTCPResponse(r);
+                r=c.tcp.read();
+            }
+
             //todo r potrebbe contenere piu di una richiesta????
             String[] tokens=r.split(" "); //OK friend list potrebbe restare da leggere
             //todo scorri tutti i token per vedere se c'è qualcosa
@@ -62,7 +69,7 @@ public class Client {
 
             }
         }
-    }
+    }*/
 
     public void menuOut(){
         System.out.println("1)Registra utente");
@@ -98,7 +105,31 @@ public class Client {
                 inviaSfida();
                 break;
             case 3:
-                pendingFriends();
+                getPendingFriends();
+        }
+    }
+
+    public void manageTCPResponse(String response){
+        //todo cambiare risposte server
+        String[] tokens=response.split(" ");
+        if(tokens[0].equals("OK")){
+            switch(tokens[1]){
+                case "AMICIZIA":
+                    //manageAmicizia();
+                    break;
+                case "SFIDA":
+                    //manageSfida();
+                    break;
+                case "LIST":
+                    managePendingFriends(tokens);
+                    break;
+            }
+        }
+        else if(tokens[0].equals("NOK")){
+
+        }
+        else{
+
         }
     }
 
@@ -132,6 +163,9 @@ public class Client {
             token=tokens[1];
             pendingSize=Integer.parseInt(tokens[2]);
         }
+        else {
+            //todo
+        }
         System.out.println(response);
     }
 
@@ -143,6 +177,8 @@ public class Client {
         String friend=nbIO.getLineBlocking();
         String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RICHIESTA";
         tcp.send(request);
+        //response OK
+        //response NOK eccezione
     }
 
     /**
@@ -153,6 +189,19 @@ public class Client {
         String friend=nbIO.getLineBlocking();
         String request="SFIDA "+loggedNick+" "+token+" "+friend;
         tcp.send(request);
+        //response OK AMICIZIA ACCETTATA/RIFIUTATA
+        //response NOK eccezione
+    }
+
+    /**
+     * Richiede la lista delle richieste di amicizia in sospeso
+     */
+    public void getPendingFriends(){
+        String request = "GET "+loggedNick+" "+token+" PENDING FRIENDS";
+        tcp.send(request);
+        //response OK LIST ...
+        //response NOK eccezione
+
     }
 
     /**
@@ -181,51 +230,22 @@ public class Client {
         return null;
     }
 
-    public String[] getPendingFriends(){
-        String request = "GET "+loggedNick+" "+token+" PENDING FRIENDS";
-        tcp.send(request);
-        String response = tcp.read();
-        String[] tokens=null;
-        if(response!=null) {
-            tokens = response.split(" ");
-            if (tokens[0].equals("OK")) {
 
-                for (int i = 1; i < tokens.length; i++) {
-                    System.out.println(i + ": " + tokens[i]);
-                }
-            }
+
+    public void managePendingFriends(String[] friends){
+        System.out.println("0: INDIETRO");
+        for (int i = 2; i < friends.length; i++) {
+            System.out.println(i + ": " + friends[i]);
         }
-        return tokens;
-    }
-
-    public void pendingFriends(){
-        //todo fetch pending and show
-        //todo se arriva richiesta di amicizia o sfida??
-        String[] last=null;
+        //todo gestione nuove richieste e sfide
         int scelta=-1;
         while(scelta<0 /*&& !udp request sfida*/) {
-
-            String[] friends=getPendingFriends();
-            System.out.println("0: INDIETRO");
-            if(friends!=null && !last.equals(friends)) {
-                    for (int i = 1; i < friends.length; i++) {
-                        System.out.println(i + ": " + friends[i-1]);
-                    }
-
-            }
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
             String line;
             if((line=nbIO.getLine())!=null){
                 scelta=Integer.parseInt(line);
 
                 if(friends!=null && scelta>0 && scelta<=friends.length) {
-
-
-                    managePendingFriend(friends[scelta - 1]);
+                    //managePendingFriend(friends[scelta - 1]);
                     if(scelta>0) {
                         System.out.println("0) INDIETRO");
                         System.out.println("1) ACCETTA");
@@ -236,7 +256,6 @@ public class Client {
             }
 
         }
-
 
 
     }
