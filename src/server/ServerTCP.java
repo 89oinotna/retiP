@@ -56,6 +56,7 @@ public class ServerTCP implements Runnable {
             while (iterator.hasNext()) {
 
                 SelectionKey k = iterator.next();
+                //todo k non valida
                 if(usingK.putIfAbsent(k,k)==null) {
                     iterator.remove();
                     WorkerTCP wrk = new WorkerTCP(selector, k, utenti, usingK);

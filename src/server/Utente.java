@@ -164,7 +164,27 @@ public class Utente {
         return pendingRequest.size();
     }
 
-    public Iterator<String> getPending() {
+    /*public Iterator<String> getPending() {
         return pendingRequest.keySet().iterator();
+    }*/
+
+    public JSONArray getAmici() {
+        JSONArray array=new JSONArray();
+
+        array.addAll(amici.keySet());
+        return array;
+    }
+
+    public String[] getFriendsArray() {
+
+        return (String[]) amici.keySet().toArray();
+    }
+
+    public JSONArray getRichiesteAmicizia() {
+
+        JSONArray array=new JSONArray();
+
+        array.addAll(pendingRequest.keySet());
+        return array;
     }
 }

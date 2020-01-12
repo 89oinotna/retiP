@@ -1,5 +1,7 @@
 package client;
 
+import client.customComponents.FriendRequestTile;
+
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -24,12 +26,13 @@ public class ClientLoginGUI {
         window.setLocation(100,100);
         window.setVisible(true);
 
+
         registerBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 LoginPanel.setEnabled(false);
                 System.out.println("clicked");
-                String response=c.registraUtente(nickTB.getText(), Arrays.toString(pwTB.getPassword()));
+                String response=c.registraUtente(nickTB.getText(), new String(pwTB.getPassword()));
 
 
 
@@ -38,7 +41,9 @@ public class ClientLoginGUI {
         loginBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                String response=c.loginUtente(nickTB.getText(), Arrays.toString(pwTB.getPassword()));
+                String response=c.loginUtente(nickTB.getText(), new String(pwTB.getPassword()));
+                System.out.println(response);
+                manageResponse(response);
             }
         });
     }
@@ -51,5 +56,19 @@ public class ClientLoginGUI {
 
     public void close() {
         window.dispose();
+    }
+
+    public void manageResponse(String response){
+        String[] tokens=response.split(" ");
+        if(tokens[0].equals("OK")){
+
+        }
+        else if(tokens[0].equals("NOK")){
+            JOptionPane.showMessageDialog(window, tokens[1]);
+        }
+        else{
+
+        }
+
     }
 }

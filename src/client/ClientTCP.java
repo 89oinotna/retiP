@@ -1,24 +1,39 @@
 package client;
 
+import org.json.simple.JSONArray;
+import org.json.simple.parser.JSONParser;
+import org.json.simple.parser.ParseException;
+
+import javax.swing.*;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.util.Arrays;
-import java.util.Scanner;
+import java.util.*;
 
+//LOGIN E REGISTRAZIONE WRITE E READ SERIALI NELLA STESSA FUNZIONE
+//ALTRI COMANDI:
 public class ClientTCP implements Runnable{
     private SocketAddress address;
     private SocketChannel socketChannel;
     private ByteBuffer byteBuffer;
     private int BUFFLEN=1024;
     private Scanner scanner;
-    private ClientLoggedGUI clientLoggedGUIGUI;
-    public ClientTCP(){
-        address = new InetSocketAddress("127.0.0.1", 8080);
+    private List<String> pendingFriendsList;
+    private List<String> friendsList;
+    private String token;
+    private ClientLoggedGUI gui;
 
+    private StringBuilder lastResponse;
+    private String loggedNick;
+
+    public ClientTCP(List<String> pendingFriendsList, List<String> friendsList){
+        this.pendingFriendsList=pendingFriendsList;
+        this.friendsList=friendsList;
+        address = new InetSocketAddress("127.0.0.1", 8080);
+        lastResponse=new StringBuilder();
 
         try {
             socketChannel = SocketChannel.open();
@@ -45,39 +60,21 @@ public class ClientTCP implements Runnable{
     }
 
     public String read(){
-        StringBuilder msg = new StringBuilder();
-
-        String response="";
-
-         response = scanner.nextLine();
-
+        String response=scanner.nextLine();
+        while(response==null) {
+            response = scanner.nextLine();
+        }
+        //System.out.println("r"+response);
         return response;
 
 
-        /*int read = 0;
-        try {
-            read = socketChannel.read(byteBuffer);
-
-        while (read > 0 ) {
-
-            String ne=new String(Arrays.copyOfRange(byteBuffer.array(), 0, read));
-            msg.append(ne);
-            byteBuffer.clear();
-            //System.out.println(ne+read);
-            read = socketChannel.read(byteBuffer);
-
-            //
-        }
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-        return msg.toString();*/
 
     }
 
     public void send(String message){
         //todo aggiusta sta merda
-        ByteBuffer buf = ByteBuffer.wrap(message.getBytes());
+        ByteBuffer buf = ByteBuffer.wrap((message+"  \n").getBytes());
+
         //System.out.println(message);
         try {
 
@@ -103,86 +100,190 @@ public class ClientTCP implements Runnable{
         String message="LOGIN "+nick+" "+pw;
         send(message);
         String response=read();
-        while(response==null||response.length()==0){
-            response=read();
-        }
         return response;
     }
 
-    /*public String readBlocking() {
-        StringBuilder msg = new StringBuilder();
-
-        String response="";
-
-        response = nb.getLineBlocking();
-
-        return response;
-    }*/
 
     @Override
     public void run() {
         while(!Thread.currentThread().isInterrupted()){
+
             String response=read();
-            manageResponse(response);
+            System.out.println("r"+response);
+            manageCommand(response);
         }
     }
 
-    public void manageResponse(String response){
+    /**
+     * restituisce l'ultima risposta a un comando
+     * @return
+     */
+    public String getResponse(){
+
+        synchronized (lastResponse){
+            while(lastResponse.length()<1) {
+                try {
+                    lastResponse.wait();
+
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+            String response=lastResponse.toString();
+            lastResponse.setLength(0);
+            return response;
+        }
+
+
+    }
+
+    /**
+     * Gestisce i comandi ricevuto
+     * @param response
+     */
+    public void manageCommand(String response){
         //todo cambiare risposte server
+
+
         String[] tokens=response.split(" ");
-        if(tokens[0].equals("OK")){
-            switch(tokens[1]){
+        if (tokens[0].equals("OK") || tokens[0].equals("NOK")) {
+            synchronized (lastResponse) {
+                lastResponse.append(response);
+                lastResponse.notify();
+            }
+        }
+
+        else if(tokens[1].equals(token)) { //validazione tramite token della risposta
+
+
+            switch (tokens[0]) {
+                //AMICIZIA TOKEN NICK TYPE
                 case "AMICIZIA":
-                    manageAmicizia();
+                    manageAmicizia(tokens[2], tokens[3]);
+                    break;
+                case "AMICI":
+                    //todo oggettojson
+                    manageAmici(tokens[2]);
+                    break;
+                case "CLASSIFICA": //async
+                    //todo oggettojson classifica
+                    manageClassifica(tokens[2]);
+                    break;
+                case "PENDING":
+                    //todo oggettojson
+                    managePendingFriends(tokens[2]);
                     break;
                 case "SFIDA":
                     //manageSfida();
                     break;
-                case "LIST":
-                    managePendingFriends(tokens);
+
+
+                default:
+
                     break;
             }
-        }
-        else if(tokens[0].equals("NOK")){
 
         }
+
         else{
-
+            //boh exception?
         }
 
         //if(){}
     }
 
+    private void manageAmici(String json) {
+        try {
+            JSONArray array=(JSONArray) (new JSONParser().parse(json));
+            for (Object s:array) {
+                gui.addFriendTile((String)s);
+            }
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void manageClassifica(String json) {
+        //todo parse json and update gui
+        try {
+            JSONArray array=(JSONArray) (new JSONParser().parse(json));
+            for (Object s:array) {
+                //gui.addClassificaTile((String)s);
+            }
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void managePendingFriends(String json) {
+        try {
+            JSONArray array=(JSONArray) (new JSONParser().parse(json));
+            //gui.setPendingRow(array.size());
+            for (Object s:array) {
+                gui.addPendingFriendTile((String)s);
+            }
+            //gui.boh();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+    }
+
+
+
+
+
     /**
      * Invia la richiesta di amicizia
      */
-    public void aggiungiAmico(){
+    public void aggiungiAmico(String friend){
         //todo get from tb
-        String friend="";//nbIO.getLineBlocking();
         String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RICHIESTA";
         send(request);
+        String response=getResponse();
+
         //response OK
         //response NOK eccezione
     }
 
     /**
+     * accetta la richiesta di amicizia
+     * @param friend
+     */
+    public boolean accettaAmico(String friend) {
+
+        String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" ACCETTA";
+        send(request);
+        String[] tokens=getResponse().split(" ");
+        return tokens[0].equals("OK");
+    }
+
+    public boolean rifiutaAmico(String friend) {
+        String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RIFIUTA";
+        send(request);
+        String[] tokens=getResponse().split(" ");
+        return tokens[0].equals("OK");
+    }
+
+    /**
      * gestisce l'invio della sfida ad un amico
      */
-    public void inviaSfida(){
-        System.out.println("Inserisci il nome dell'amico da sfidare");
-        String friend=nbIO.getLineBlocking();
+    public void inviaSfida(String friend){
         String request="SFIDA "+loggedNick+" "+token+" "+friend;
         send(request);
         //response OK AMICIZIA ACCETTATA/RIFIUTATA
         //response NOK eccezione
+
     }
 
     /**
      * Richiede la lista delle richieste di amicizia in sospeso
      */
-    public void getPendingFriends(){
-        String request = "GET "+loggedNick+" "+token+" PENDING FRIENDS";
-        tcp.send(request);
+    public void getPendingFriends(String nick, String token){
+        String request = "GET "+nick+" "+token+" PENDING FRIENDS";
+        send(request);
+        //todo server return json object
         //response OK LIST ...
         //response NOK eccezione
 
@@ -200,53 +301,36 @@ public class ClientTCP implements Runnable{
             case "RICHIESTA":
 
                 //todo show richiesta arrivata
-                System.out.println("Richiesta di amicizia da "+friend);
-                pendingSize++;
-                //manageRichiestaAmicizia(friend);
+                //System.out.println("Richiesta di amicizia da "+friend);
+                pendingFriendsList.add(friend);
+                gui.addPendingFriendTile(friend);
+
                 break;
             case "ACCETTATA":
-                //boh
+                friendsList.add(friend);
+                gui.addFriendTile(friend);
                 break;
             case "RIFIUTATA":
-                //boh
+                //todo non mi interessano le richieste rifiutato rimuoverlo ache dal server
                 break;
         }
         return null;
     }
 
 
-
-    public void managePendingFriends(String[] friends){
-        System.out.println("0: INDIETRO");
-        for (int i = 2; i < friends.length; i++) {
-            System.out.println(i + ": " + friends[i]);
-        }
-        //todo gestione nuove richieste e sfide
-        int scelta=-1;
-        while(scelta<0 /*&& !udp request sfida*/) {
-            String line;
-            if((line=nbIO.getLine())!=null){
-                scelta=Integer.parseInt(line);
-
-                if(friends!=null && scelta>0 && scelta<=friends.length) {
-                    //managePendingFriend(friends[scelta - 1]);
-                    if(scelta>0) {
-                        System.out.println("0) INDIETRO");
-                        System.out.println("1) ACCETTA");
-                        System.out.println("2) RIFIUTA");
-                    }
-                }
-
-            }
-
-        }
-
-
+    public void setToken(String token) {
+        this.token=token;
     }
 
-    public void setGUI(ClientLoggedGUI _clientLoggedGUI){
-
-        clientLoggedGUIGUI=_clientLoggedGUI;
+    public void setGUI(ClientLoggedGUI gui){
+        this.gui=gui;
     }
+
+    public void setLoggedNick(String nick){
+        loggedNick=nick;
+    }
+
+
+
 }
 

@@ -16,7 +16,7 @@ public class Client {
     private int pendingSize;
     public Client(){
         rmi = new ClientRMI(8082);
-        tcp=new ClientTCP();
+        //tcp=new ClientTCP();
         logged=false;
         sc=new Scanner(System.in);
     }

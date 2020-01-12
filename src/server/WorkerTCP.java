@@ -5,6 +5,10 @@ import exceptions.UserNotExists;
 import exceptions.WrongCredException;
 
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -12,8 +16,10 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.Iterator;
+import java.util.Scanner;
 import java.util.concurrent.ConcurrentHashMap;
 
+//todo wait for reply (cosi non si accodano le risposte)
 public class WorkerTCP implements Runnable {
     private SelectionKey k;
     private int BUFFLEN=1024;
@@ -36,16 +42,20 @@ public class WorkerTCP implements Runnable {
             } else if (k.isReadable()) {
                 String command = read(k);
                 System.out.println(command);
-                String response = "";//ManagerLogin.login(cred[0], cred[1]);
-                response=manageCommand(command, k)+"\n";
-                System.out.println(response);
-                send(k, response);
+
+                String response = manageCommand(command, k) ;
+                System.out.println("r:"+response);
+                if(response!=null) {
+                    System.out.println(response);
+                    send(k, response+ "\n");
+                }
                 //System.out.println("boh");
 
             }
         } catch (IOException e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             System.out.println("Disconnected");
+            //todo cancellare sfide attive o altro;
             k.cancel();
         }
         finally {
@@ -63,6 +73,7 @@ public class WorkerTCP implements Runnable {
                 return login(tokens, k);
             case "SFIDA":
                 //sfida nick token nickAmico
+                //todo update della classifica per tutti i client amici
                 return sfida(tokens);
 
             case "AMICIZIA":
@@ -74,22 +85,28 @@ public class WorkerTCP implements Runnable {
                 //return parola();
                 break;
             case "GET":
+                //get nick token pending/amici/classifica
                 return get(tokens);
 
             default:
                 break;
         }
+
         return null;
     }
 
     private String get(String[] tokens) {
-        if(tokens[4].equals("FRIENDS")){
-            StringBuilder response= new StringBuilder("OK ");
-            Iterator<String> it=utenti.getPending(tokens[1]);
-            while(it.hasNext()) response.append(it.next());
-            return response.toString();
+        switch(tokens[3]){
+            case "AMICI":
+                break;
+            case "CLASSIFICA":
+                break;
+            case "PENDING":
+                break;
+            default:
+                return "NOK";
         }
-        return "NOK";
+        return "";
     }
 
     /**
@@ -100,7 +117,12 @@ public class WorkerTCP implements Runnable {
     public String login(String[] tokens, SelectionKey k){
         //todo al login mostrare le nuove richieste di amicizia in sospeso (o contatore)
         try{
-            return "OK "+utenti.loginUtente(tokens[1], tokens[2], k)+" "+utenti.getPendingSize(tokens[1]);
+            //todo JSON con amici e richieste di amicizia
+            return "OK "+utenti.loginUtente(tokens[1], tokens[2], k)+" \nAMICI "
+                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.listaAmici(tokens[1]).toJSONString()+" \nPENDING "
+                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.listaRichiesteAmicizia(tokens[1]).toJSONString();/*+" \nCLASSIFICA "
+                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.mostraClassifica(tokens[1]).toJSONString();*/
+
 
         } catch (UserAlreadyLogged ex) {
             return "NOK UserAlreadyLogged";
@@ -117,10 +139,26 @@ public class WorkerTCP implements Runnable {
      * @return true false
      */
     public String sfida(String[] tokens){
+        InetAddress IPAddress = null;
+        try {
+            IPAddress = InetAddress.getByName("localhost");
+        } catch (UnknownHostException e) {
+            e.printStackTrace();
+        }
+        String msg="SFIDA "+i+" "+ System.currentTimeMillis();
+        byte[] sendData=msg.getBytes();
+        DatagramPacket sPacket=new DatagramPacket(sendData, sendData.length, IPAddress, port);
+        cs.send(sPacket);
+        if (utenti.validateToken(tokens[1], tokens[2]) ){
 
-        if (utenti.validateToken(tokens[1], tokens[3]) && !utenti.hasSfidaAttiva(tokens[1])){
-            //TODO genera worker udp e inoltra la richiesta (utilizzare future?)
-            utenti.creaSfida(tokens[1], tokens[2]);
+            try{
+                utenti.sfida(tokens[1], tokens[3]);}
+            catch(UserNotOnline e){
+                return "NOK UserNotOnline";
+            }
+            catch(UserAlreadyInGame e){
+                return "NOK UserAlreadyInGame";
+            }
             return "OK";
         }
         else{
@@ -143,7 +181,7 @@ public class WorkerTCP implements Runnable {
                     // (lo aggiungo lo stesso alla pending?)
                     SelectionKey kFriend = utenti.getUtente(friend).getK();
                     //AMICIZIA nick token(friend) RICHIESTA
-                    String response = "AMICIZIA " + nick + " " + utenti.getUtente(friend).getToken() + " RICHIESTA \n";
+                    String response = "AMICIZIA " + nick + " " + utenti.getUtente(friend).getToken() + " RICHIESTA";
                     try {
                         while (utenti.isLogged(friend)) {
 
@@ -174,35 +212,7 @@ public class WorkerTCP implements Runnable {
     }
 
     public boolean rispondiAmicizia(String nick, String friend){
-
-        if(utenti.exists(friend)) {
-            utenti.getUtente(friend).addPending(nick);
-            if (utenti.isLogged(friend)) { //se è loggato gliela mando
-                // (lo aggiungo lo stesso alla pending?)
-                SelectionKey kFriend = utenti.getUtente(friend).getK();
-                while(true) {
-                    if (k.isWritable()) break;
-                }
-                //AMICIZIA nick token(friend) RICHIESTA
-                String response = "AMICIZIA " + nick + " " + utenti.getUtente(friend).getToken() + " RICHIESTA";
-                try {
-                    send(kFriend, response);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    return false;
-                }
-                return true;
-
-            } else {
-                //aggiungi alla lista delle richieste pendenti se offline
-                //todo se utente non esiste
-
-                return true;
-            }
-        }
-        else{
-            throw new UserNotExists();
-        }
+        return false;
     }
 
     public String amicizia(String[] tokens){
@@ -230,7 +240,7 @@ public class WorkerTCP implements Runnable {
                     //l'altro non ha accettato, inoltra il rifiuto
                     //todo gestione getutente null
                     utenti.getUtente(tokens[1]).removePending(tokens[3]);
-                    //TODO invia rifiuto
+
                     break;
             }
 
@@ -266,13 +276,18 @@ public class WorkerTCP implements Runnable {
      * @throws IOException
      */
     public String read(SelectionKey k) throws IOException {
+        //todo scanner
         StringBuilder request = new StringBuilder();
         SocketChannel client = (SocketChannel) k.channel();
         ByteBuffer buffer = (ByteBuffer) k.attachment();
 
+
+        //Scanner scanner = new Scanner(client.socket());
+        //TODO lasciare nel buffer i comandi dopo \n
         int read = client.read(buffer);
         byte[] bytes;
         while (read > 0) {
+
             buffer.flip();
             bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
@@ -284,6 +299,7 @@ public class WorkerTCP implements Runnable {
         if (read == -1) throw new IOException("Closed");
         buffer.clear();
         return request.toString();
+        //return scanner.nextLine();
     }
 
     /**

@@ -9,14 +9,12 @@ import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import server.*;
 
-import java.io.File;
-import java.io.IOException;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.util.Iterator;
-import java.util.Scanner;
+import java.util.*;
 
 public class Server {
     /**
@@ -27,13 +25,26 @@ public class Server {
     public Utenti u; //struttura dati principale del server
     private ServerRMI serverrmi;
     private ServerTCP servertcp;
+    private List<String> dict;
+    private static final int n=200;
 
     public Server() {
-
+        dict= Collections.synchronizedList(new ArrayList<String>(n));
         try {
+            File file = new File("dict.txt");
+            Scanner ss = new Scanner(file);
+            while (ss.hasNextLine()) {
+                String data = ss.nextLine();
+                if (data.length() > 3) dict.add(data);
 
+            }
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        try {
+            /*
             if (new File("utenti.json").createNewFile()) {
-                u = new Utenti();
+                u = new Utenti(dict);
             } else {
                 FileChannel inChannel = FileChannel.open(Paths.get("utenti.json"), StandardOpenOption.READ);
                 ByteBuffer buffer = ByteBuffer.allocate(1024);
@@ -47,14 +58,18 @@ public class Server {
                     json += new String(b);
                     buffer.clear();
 
-                }
+                }*/
                 //System.out.println(json);
-                JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json));
-                u = new Utenti(utentiJSON);
-            }
-
-        } catch (IOException | ParseException e) {
-            e.printStackTrace();
+                File file = new File("utenti.json");
+                Scanner ss = new Scanner(file);
+                StringBuilder json=new StringBuilder();
+                while (ss.hasNext()) {
+                    json.append(ss.next());
+                }
+                JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json.toString()));
+                u = new Utenti(utentiJSON, dict);
+            } catch (FileNotFoundException | ParseException ex) {
+            ex.printStackTrace();
         }
 
 
@@ -144,7 +159,7 @@ public class Server {
          * test punteggio
          */
         this.u.aggiornaPunteggio("antonio", 10);
-        assert (this.u.getPunteggio("antonio") == 10);
+        assert (this.u.mostraPunteggio("antonio") == 10);
     }
 
 }
