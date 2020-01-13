@@ -1,6 +1,7 @@
 package client;
 
 import org.json.simple.JSONArray;
+import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 
@@ -23,15 +24,17 @@ public class ClientTCP implements Runnable{
     private Scanner scanner;
     private List<String> pendingFriendsList;
     private List<String> friendsList;
+    private List<String> classificaList;
     private String token;
     private ClientLoggedGUI gui;
 
     private StringBuilder lastResponse;
     private String loggedNick;
 
-    public ClientTCP(List<String> pendingFriendsList, List<String> friendsList){
+    public ClientTCP(List<String> pendingFriendsList, List<String> friendsList, List<String> classificaList){
         this.pendingFriendsList=pendingFriendsList;
         this.friendsList=friendsList;
+        this.classificaList=classificaList;
         address = new InetSocketAddress("127.0.0.1", 8080);
         lastResponse=new StringBuilder();
 
@@ -64,24 +67,15 @@ public class ClientTCP implements Runnable{
         while(response==null) {
             response = scanner.nextLine();
         }
-        //System.out.println("r"+response);
         return response;
-
-
-
     }
 
     public void send(String message){
-        //todo aggiusta sta merda
+        //todo aggiusta
         ByteBuffer buf = ByteBuffer.wrap((message+"  \n").getBytes());
-
-        //System.out.println(message);
         try {
-
             while (buf.hasRemaining()) {
-
                 int w=socketChannel.write(buf);
-
             }
         } catch (IOException e) {
             e.printStackTrace();
@@ -191,14 +185,19 @@ public class ClientTCP implements Runnable{
             //boh exception?
         }
 
-        //if(){}
     }
 
     private void manageAmici(String json) {
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
-            for (Object s:array) {
-                gui.addFriendTile((String)s);
+            synchronized (friendsList){
+                for (Object s:array) {
+                //TODO NOTIFY AMICI
+                //gui.addFriendTile((String)s);
+
+                    friendsList.add((String) s);
+                }
+                friendsList.notify();
             }
         } catch (ParseException e) {
             e.printStackTrace();
@@ -209,8 +208,14 @@ public class ClientTCP implements Runnable{
         //todo parse json and update gui
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
-            for (Object s:array) {
-                //gui.addClassificaTile((String)s);
+            synchronized (classificaList) {
+                for (Object s : array) {
+                    //gui.addPendingFriendTile((String) s);
+                    JSONObject amicoJSON=(JSONObject)s;
+                    String amico=amicoJSON.get("nick").toString() + amicoJSON.get("punteggio").toString();
+                    classificaList.add(amico);
+                }
+                classificaList.notify();
             }
         } catch (ParseException e) {
             e.printStackTrace();
@@ -221,15 +226,18 @@ public class ClientTCP implements Runnable{
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             //gui.setPendingRow(array.size());
-            for (Object s:array) {
-                gui.addPendingFriendTile((String)s);
+            synchronized (pendingFriendsList) {
+                for (Object s : array) {
+                    //gui.addPendingFriendTile((String) s);
+                    pendingFriendsList.add((String) s);
+                }
+                pendingFriendsList.notify();
             }
             //gui.boh();
         } catch (ParseException e) {
             e.printStackTrace();
         }
     }
-
 
 
 
@@ -256,7 +264,16 @@ public class ClientTCP implements Runnable{
         String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" ACCETTA";
         send(request);
         String[] tokens=getResponse().split(" ");
-        return tokens[0].equals("OK");
+        if(tokens[0].equals("OK")){
+            synchronized (friendsList){
+                synchronized (pendingFriendsList){
+                    pendingFriendsList.remove(friend);
+                    friendsList.add(friend);
+                }
+            }
+            return true;
+        }
+        return false;
     }
 
     public boolean rifiutaAmico(String friend) {
@@ -267,13 +284,17 @@ public class ClientTCP implements Runnable{
     }
 
     /**
-     * gestisce l'invio della sfida ad un amico
+     * invia la sfida ad un amico
+     * @param friend
+     * @return true se accettata, false altrimenti
      */
-    public void inviaSfida(String friend){
+    public boolean inviaSfida(String friend){
         String request="SFIDA "+loggedNick+" "+token+" "+friend;
         send(request);
         //response OK AMICIZIA ACCETTATA/RIFIUTATA
         //response NOK eccezione
+        String[] tokens=getResponse().split(" ");
+        return tokens[0].equals("OK");
 
     }
 
@@ -302,16 +323,22 @@ public class ClientTCP implements Runnable{
 
                 //todo show richiesta arrivata
                 //System.out.println("Richiesta di amicizia da "+friend);
-                pendingFriendsList.add(friend);
-                gui.addPendingFriendTile(friend);
+                synchronized (pendingFriendsList) {
+                    pendingFriendsList.add(friend);
+                    pendingFriendsList.notify();
+                }
+                //todo gui.addPendingFriendTile(friend);
 
                 break;
             case "ACCETTATA":
-                friendsList.add(friend);
-                gui.addFriendTile(friend);
+                synchronized (friendsList) {
+                    friendsList.add(friend);
+                    friendsList.notify();
+                }
+                //todo gui.addFriendTile(friend);
                 break;
             case "RIFIUTATA":
-                //todo non mi interessano le richieste rifiutato rimuoverlo ache dal server
+                //todo non mi interessano le richieste rifiutate, rimuoverlo anche dal server
                 break;
         }
         return null;
@@ -322,9 +349,6 @@ public class ClientTCP implements Runnable{
         this.token=token;
     }
 
-    public void setGUI(ClientLoggedGUI gui){
-        this.gui=gui;
-    }
 
     public void setLoggedNick(String nick){
         loggedNick=nick;

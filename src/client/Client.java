@@ -5,6 +5,7 @@ import java.io.File;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ThreadPoolExecutor;
 
 public class Client {
     private ClientRMI rmi;
@@ -19,16 +20,18 @@ public class Client {
     //todo togliere dal server il pendingsize
     private List<String> pendingFriendsList; //lista delle richieste di amicizia ricevute
     private List<String> friendsList; //lista degli amici
+    private List<String> classificaList; //classifica
     private ClientLoginGUI cloginGUI;
 
 
     public Client(){
         pendingFriendsList=Collections.synchronizedList(new LinkedList<>());
         friendsList=Collections.synchronizedList(new LinkedList<>());
+        classificaList=Collections.synchronizedList(new LinkedList<>());
         logged=false;
 
         rmi = new ClientRMI(8082);
-        tcp=new ClientTCP(pendingFriendsList, friendsList);
+        tcp=new ClientTCP(pendingFriendsList, friendsList, classificaList);
 
 
 
@@ -94,7 +97,78 @@ public class Client {
         c.cloginGUI.close();
 
         c.cloggedGUI=new ClientLoggedGUI(c.tcp, c.loggedNick);
-
+        Thread tcpTH=new Thread(c.tcp);
+        tcpTH.start();
+        //TODO LISTENER PER OGGETTO RICHIESTE aMICIZIA
+        Thread amiciziaTH=new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int size=0;
+                while(!Thread.currentThread().isInterrupted()){
+                    synchronized (c.friendsList){
+                        while(size==c.friendsList.size()) {
+                            try {
+                                c.friendsList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        while(size<c.friendsList.size()){
+                            c.cloggedGUI.addFriendTile(c.friendsList.get(size++));
+                            c.cloggedGUI.updateUI();
+                        }
+                    }
+                }
+            }
+        });
+        //TODO LISTENER OGGETTO AMICIZIA ACCETTATA
+        Thread pendingTH=new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int size=0;
+                while(!Thread.currentThread().isInterrupted()){
+                    synchronized (c.pendingFriendsList){
+                        while(size==c.pendingFriendsList.size()) {
+                            try {
+                                c.pendingFriendsList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        while(size<c.pendingFriendsList.size()){
+                            c.cloggedGUI.addPendingFriendTile(c.pendingFriendsList.get(size++));
+                            c.cloggedGUI.updateUI();
+                        }
+                    }
+                }
+            }
+        });
+        Thread classificaTH=new Thread(new Runnable() {
+            @Override
+            public void run() {
+                int size=0;
+                while(!Thread.currentThread().isInterrupted()){
+                    synchronized (c.classificaList){
+                        while(size==c.classificaList.size()) {
+                            try {
+                                c.classificaList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                        }
+                        if(size<c.pendingFriendsList.size()) {
+                            c.cloggedGUI.updateClassifica(c.classificaList);
+                            c.cloggedGUI.updateUI();
+                            size=c.pendingFriendsList.size();
+                        }
+                    }
+                }
+            }
+        });
+        amiciziaTH.start();
+        pendingTH.start();
+        classificaTH.start();
+        //todo listener classifica
         synchronized (c){
             while(!c.isLogged()){
                 try {

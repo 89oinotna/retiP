@@ -27,14 +27,12 @@ public class ClientLoggedGUI {
     private JPanel pending;
     private JPanel friends;
     private ClientTCP tcp;
-    private Thread tcpTH;
+
     private JFrame window;
 
     public ClientLoggedGUI(ClientTCP tcp, String nick){
         this.tcp=tcp;
-        this.tcp.setGUI(this);
-        tcpTH=new Thread(tcp);
-        tcpTH.start();
+
         window = new JFrame("ClientGUI");
         window.setContentPane(this.LoggedPanel);
         window.setSize(800,600);
@@ -43,6 +41,7 @@ public class ClientLoggedGUI {
         pending.setLayout(new GridLayout(0, 1));
         friends.setLayout(new GridLayout(0, 1));
         Name.setText(nick);
+
 
 
 
@@ -61,19 +60,22 @@ public class ClientLoggedGUI {
         //pendingRequest.getViewport().add(new FriendRequestTile(nick), null);
         //pendingRequest.revalidate();
 
+        //listener per bottone che accetta
         ActionListener aListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 if(tcp.accettaAmico(nick)){
                    int index=getPendingTileIndex(nick);
                     pending.remove(index);
-                    pending.updateUI();
+
                     addFriendTile(nick);
+
                 }
 
             }
         };
 
+        //listener per bottone che rifiuta
         ActionListener dListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
@@ -107,22 +109,31 @@ public class ClientLoggedGUI {
      */
     public void addFriendTile(String nick){
 
-        friends.add(new FriendTile(nick));
-        friends.updateUI();
+        //listener per bottone sfida
+        ActionListener sListener= new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                if(true/*todo not in sfida*/){
+                    if(tcp.inviaSfida(nick)){
+                        //todo start sfida
+                    }
+                }
+            }
+        };
+        friends.add(new FriendTile(nick, sListener));
+        //friends.updateUI();
 
     }
 
 
-    public void updateClassifica(Vector<String> list){
-        ClassificaList.setListData(list);
+    public void updateClassifica(List<String> list){
 
+        ClassificaList.setListData(list.toArray(new String[list.size()]));
+        //ClassificaList.updateUI();
     }
 
-    public void boh() {
-        pending.add(Box.createVerticalGlue());
+    public void updateUI(){
+        LoggedPanel.updateUI();
     }
 
-    public void setPendingRow(int size) {
-        //pending.setLayout(new GridLayout(size,1));
-    }
 }

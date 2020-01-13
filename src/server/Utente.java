@@ -177,7 +177,7 @@ public class Utente {
 
     public String[] getFriendsArray() {
 
-        return (String[]) amici.keySet().toArray();
+        return (String[]) amici.keySet().toArray(new String[amici.size()]);
     }
 
     public JSONArray getRichiesteAmicizia() {

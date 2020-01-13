@@ -119,9 +119,9 @@ public class WorkerTCP implements Runnable {
         try{
             //todo JSON con amici e richieste di amicizia
             return "OK "+utenti.loginUtente(tokens[1], tokens[2], k)+" \nAMICI "
-                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.listaAmici(tokens[1]).toJSONString()+" \nPENDING "
-                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.listaRichiesteAmicizia(tokens[1]).toJSONString();/*+" \nCLASSIFICA "
-                    +utenti.getUtente(tokens[1]).getToken()+" "+utenti.mostraClassifica(tokens[1]).toJSONString();*/
+                    +utenti.getToken(tokens[1])+" "+utenti.listaAmici(tokens[1]).toJSONString()+" \nPENDING "
+                    +utenti.getToken(tokens[1])+" "+utenti.listaRichiesteAmicizia(tokens[1]).toJSONString()+" \nCLASSIFICA "
+                    +utenti.getToken(tokens[1])+" "+utenti.mostraClassifica(tokens[1]).toJSONString();
 
 
         } catch (UserAlreadyLogged ex) {
@@ -139,7 +139,7 @@ public class WorkerTCP implements Runnable {
      * @return true false
      */
     public String sfida(String[] tokens){
-        InetAddress IPAddress = null;
+        /*InetAddress IPAddress = null;
         try {
             IPAddress = InetAddress.getByName("localhost");
         } catch (UnknownHostException e) {
@@ -163,7 +163,8 @@ public class WorkerTCP implements Runnable {
         }
         else{
             return "NOK";
-        }
+        }*/
+        return null;
     }
 
     /**

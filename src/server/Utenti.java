@@ -190,7 +190,7 @@ public class Utenti implements Serializable {
         //todo se uno si disconnette quello che rimane continua da solo
         //TODO genera pacchetto udp e inoltra la richiesta (utilizzare future?)
        //todo synchronize
-        if(isLogged(n1) && isLogged(n1)) {
+        /*if(isLogged(n1) && isLogged(n1)) {
             if (!hasSfidaAttiva(n1) && !hasSfidaAttiva(n1)) {
                 if(richiestaSfida()) {
                     List<String> parole = getParole();
@@ -204,7 +204,7 @@ public class Utenti implements Serializable {
                 throw new UserAlreadyInGame();
         }
         else
-            throw new UserNotOnline();
+            throw new UserNotOnline();*/
 
     }
 
@@ -213,7 +213,7 @@ public class Utenti implements Serializable {
      * @return true se viene accettata false altrimenti
      */
     private boolean richiestaSfida(){
-
+ return true;
     }
 
     /**
@@ -258,15 +258,18 @@ public class Utenti implements Serializable {
      */
     public JSONArray mostraClassifica(String nick){
         String[] amici=utenti.get(nick).getFriendsArray();
+        JSONArray array=new JSONArray();
+
         List<Utente> ut = new ArrayList<Utente>();
-        for(int i=0; i<amici.length; i++){
-            ut.add(utenti.get(amici[i]));
+        ut.add(utenti.get(nick));
+        for (String s : amici) {
+            ut.add(utenti.get(s));
         }
 
 
         ut.sort(Comparator.comparingInt(Utente::getPunteggio));
 
-        JSONArray array=new JSONArray();
+
         for (Utente u:ut) {
             JSONObject user=new JSONObject();
             user.put("nick", u.getNickname());
@@ -303,6 +306,10 @@ public class Utenti implements Serializable {
     public int getPendingSize(String nick){return utenti.get(nick).getPendingSize();}
     public Iterator<Utente> getIterator() {
         return utenti.values().iterator();
+    }
+
+    public String getToken(String nick){
+        return utenti.get(nick).getToken();
     }
 
 
