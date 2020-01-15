@@ -77,7 +77,7 @@ public class Client {
     }
     public void menuIn(){
         System.out.println("1)Aggiungi amico");
-        System.out.println("2)Sfida amico");
+        System.out.println("2)Challenge amico");
         System.out.println("3)Richieste di amicizia "+pendingSize);
         System.out.println("4)Logout");
     }

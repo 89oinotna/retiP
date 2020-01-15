@@ -3,6 +3,7 @@ package server;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
@@ -14,6 +15,7 @@ public class ServerUdp implements Runnable {
 
     private static void read(SelectionKey key) throws IOException {
         DatagramChannel ch = (DatagramChannel) key.channel();
+        ((DatagramChannel) key.channel()).getRemoteAddress();
         conn c = (conn) key.attachment();
         c.sa = ch.receive(c.buf);
         System.out.print(c.sa.toString() + "> " + new String(c.buf.array(), "UTF-8").trim());
@@ -41,7 +43,7 @@ public class ServerUdp implements Runnable {
         try {
             selector = Selector.open();
             DatagramChannel dc = DatagramChannel.open();
-
+    //dc.tim
             dc.socket().bind(new InetSocketAddress(8081));
             dc.configureBlocking(false);
             SelectionKey clientK = dc.register(selector, SelectionKey.OP_READ);
@@ -53,6 +55,10 @@ public class ServerUdp implements Runnable {
         }
     }
 
+    public void accept(SelectionKey k){
+
+
+    }
 
     @Override
     public void run() {
@@ -65,6 +71,9 @@ public class ServerUdp implements Runnable {
                         SelectionKey key = (SelectionKey) selectedK.next();
                         selectedK.remove();
                         if (key.isValid()) {
+                            if(key.isAcceptable()){
+                                accept(key);
+                            }
                             if (key.isReadable()) {
                                 read(key);
                                 key.interestOps(SelectionKey.OP_WRITE);

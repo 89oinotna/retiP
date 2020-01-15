@@ -32,7 +32,6 @@ public class ClientRMI {
 
     public String registraUtente(String nickname, String password) {
         try {
-            if (serverObject == null) System.out.println("bo");
             return serverObject.registraUtente(nickname, password);
         } catch (RemoteException e) {
             e.printStackTrace();

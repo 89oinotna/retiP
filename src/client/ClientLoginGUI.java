@@ -19,20 +19,24 @@ public class ClientLoginGUI {
     private JFrame window;
 
     public ClientLoginGUI(Client _c) {
+        //todo togliere c
         c=_c;
         window = new JFrame("ClientGUI");
         window.setContentPane(this.LoginPanel);
         window.setSize(800,600);
         window.setLocation(100,100);
         window.setVisible(true);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
 
         registerBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                LoginPanel.setEnabled(false);
-                System.out.println("clicked");
+               // LoginPanel.setEnabled(false);
+                //System.out.println("clicked");
                 String response=c.registraUtente(nickTB.getText(), new String(pwTB.getPassword()));
+                System.out.println(response);
+                manageResponse(response);
 
 
 

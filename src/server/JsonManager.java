@@ -11,7 +11,7 @@ import java.nio.file.StandardOpenOption;
 
 public class JsonManager {
     /**
-     * Restituisce l'oggetto JSON contenente gli utenti registrati
+     * Restituisce l'oggetto JSON contenente gli users registrati
      *
      * @return
      */

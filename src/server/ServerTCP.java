@@ -18,15 +18,17 @@ public class ServerTCP implements Runnable {
     //private int BUFFLEN = 1024;
     private Selector selector;
     private ExecutorService executor;
-    private Utenti utenti;
-    private ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
-    // mi serve perchè la select potrebbe restituirmi la stessa key mentre la sto gestendo nel worker
+    private Users users;
+    private ConcurrentHashMap<SelectionKey, SelectionKey> usingK; // mi serve perchè la select potrebbe restituirmi la stessa key mentre la sto gestendo nel worker
+    private ConcurrentHashMap<String, SelectionKey> keys;
 
-    public ServerTCP(int port, Utenti _utenti) {
+
+    public ServerTCP(int port, Users _users) {
+        users = _users;
+        usingK=new ConcurrentHashMap<>();
+        executor= Executors.newCachedThreadPool();
+        keys=new ConcurrentHashMap<>();
         try {
-            utenti=_utenti;
-            usingK=new ConcurrentHashMap<>();
-            executor= Executors.newCachedThreadPool();
             serverChannel = ServerSocketChannel.open();
             ServerSocket ss = serverChannel.socket(); //prendo la referencee al socket
             ss.bind(new InetSocketAddress(port)); //bindo la porta
@@ -36,7 +38,6 @@ public class ServerTCP implements Runnable {
 
         } catch (IOException e) {
             e.printStackTrace();
-            return;
         }
     }
 
@@ -57,12 +58,14 @@ public class ServerTCP implements Runnable {
 
                 SelectionKey k = iterator.next();
                 //todo k non valida
-                if(usingK.putIfAbsent(k,k)==null) {
-                    iterator.remove();
-                    WorkerTCP wrk = new WorkerTCP(selector, k, utenti, usingK);
+                synchronized (usingK) {
+                    if (usingK.putIfAbsent(k, k) == null) {
+                        iterator.remove();
+                        WorkerTCP wrk = new WorkerTCP(selector, k, users, usingK);
+                        executor.submit(wrk);
 
-                    executor.submit(wrk);
-
+                    }
+                    usingK.notify();
                 }
 
             }

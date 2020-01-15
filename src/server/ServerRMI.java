@@ -7,15 +7,14 @@ import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.RemoteServer;
 import java.rmi.server.UnicastRemoteObject;
-import java.util.concurrent.ConcurrentHashMap;
 
 public class ServerRMI extends RemoteServer implements IServerRMI {
-    Utenti utenti;
+    Users users;
     int port;
 
-    public ServerRMI(int _port, Utenti _utenti) {
+    public ServerRMI(int _port, Users _users) {
         try {
-            utenti = _utenti;
+            users = _users;
             port = _port;
             //porta 0 indica la porta std RMI  n
             IServerRMI stub = (IServerRMI) UnicastRemoteObject.exportObject(this, 0);
@@ -33,10 +32,10 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
     public String registraUtente(String nickname, String password) throws RemoteException {
         //return ManagerRegistrazione.registraUtente(nickaname, password);
         try {
-            return "OK "+utenti.registraUtente(nickname, password);
+            return "OK ";
         } catch (UserAlreadyExists e) {
             //e.printStackTrace();
-            return "NOK UserAlreadyExists";
+            return "NOK "+e.toString().split(":")[0];
         }
 
         //todo gestire eccezione e ritornare valore

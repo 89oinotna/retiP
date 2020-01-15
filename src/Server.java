@@ -4,7 +4,6 @@
 import exceptions.UserAlreadyExists;
 import exceptions.UserNotExists;
 import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
 import server.*;
@@ -22,7 +21,7 @@ public class Server {
      * UDP port 8081
      * TCP port 8080
      */
-    public Utenti u; //struttura dati principale del server
+    public Users u; //struttura dati principale del server
     private ServerRMI serverrmi;
     private ServerTCP servertcp;
     private List<String> dict;
@@ -42,24 +41,6 @@ public class Server {
             e.printStackTrace();
         }
         try {
-            /*
-            if (new File("utenti.json").createNewFile()) {
-                u = new Utenti(dict);
-            } else {
-                FileChannel inChannel = FileChannel.open(Paths.get("utenti.json"), StandardOpenOption.READ);
-                ByteBuffer buffer = ByteBuffer.allocate(1024);
-                String json = "";
-                byte[] b;//=new byte[1024];
-                while (inChannel.read(buffer) > 0) {
-                    buffer.flip();
-                    b = new byte[buffer.remaining()];
-                    buffer.duplicate().get(b);
-                    //buffer.get(buffer.limit());
-                    json += new String(b);
-                    buffer.clear();
-
-                }*/
-                //System.out.println(json);
                 File file = new File("utenti.json");
                 Scanner ss = new Scanner(file);
                 StringBuilder json=new StringBuilder();
@@ -67,7 +48,7 @@ public class Server {
                     json.append(ss.next());
                 }
                 JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json.toString()));
-                u = new Utenti(utentiJSON, dict);
+                u = new Users(utentiJSON, dict);
             } catch (FileNotFoundException | ParseException ex) {
             ex.printStackTrace();
         }
@@ -87,7 +68,7 @@ public class Server {
 
             System.out.println("Writing JSON object to file");
             JSONArray utentiJSON = new JSONArray();
-            for (Iterator<Utente> it = u.getIterator(); it.hasNext(); ) {
+            for (Iterator<User> it = u.getIterator(); it.hasNext(); ) {
                 utentiJSON.add(it.next().toJSON());
             }
 

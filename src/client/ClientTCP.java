@@ -4,6 +4,7 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
+import server.ServerUdp;
 
 import javax.swing.*;
 import java.io.IOException;
@@ -26,10 +27,11 @@ public class ClientTCP implements Runnable{
     private List<String> friendsList;
     private List<String> classificaList;
     private String token;
-    private ClientLoggedGUI gui;
 
     private StringBuilder lastResponse;
     private String loggedNick;
+
+    private ServerUdp udp;
 
     public ClientTCP(List<String> pendingFriendsList, List<String> friendsList, List<String> classificaList){
         this.pendingFriendsList=pendingFriendsList;
@@ -112,7 +114,7 @@ public class ClientTCP implements Runnable{
      * restituisce l'ultima risposta a un comando
      * @return
      */
-    public String getResponse(){
+    public synchronized String getResponse(){
 
         synchronized (lastResponse){
             while(lastResponse.length()<1) {
@@ -213,7 +215,7 @@ public class ClientTCP implements Runnable{
                     //gui.addPendingFriendTile((String) s);
                     JSONObject amicoJSON=(JSONObject)s;
                     String amico=amicoJSON.get("nick").toString() + amicoJSON.get("punteggio").toString();
-                    classificaList.add(amico);
+                    if(!classificaList.contains(amico))classificaList.add(amico);
                 }
                 classificaList.notify();
             }
@@ -268,19 +270,42 @@ public class ClientTCP implements Runnable{
             synchronized (friendsList){
                 synchronized (pendingFriendsList){
                     pendingFriendsList.remove(friend);
-                    friendsList.add(friend);
+
+                    pendingFriendsList.notify();
+
                 }
+                friendsList.add(friend);
+                friendsList.notify();
             }
+            //todo aggiorna classifica
+
+            getClassifica();
             return true;
         }
         return false;
+    }
+
+    private void getClassifica() {
+        String request="GET "+loggedNick+" "+token+" CLASSIFICA";
+        send(request);
     }
 
     public boolean rifiutaAmico(String friend) {
         String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RIFIUTA";
         send(request);
         String[] tokens=getResponse().split(" ");
-        return tokens[0].equals("OK");
+        if(tokens[0].equals("OK")){
+
+            synchronized (pendingFriendsList){
+                pendingFriendsList.remove(friend);
+                pendingFriendsList.notify();
+
+            }
+
+
+            return true;
+        }
+        return false;
     }
 
     /**

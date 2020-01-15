@@ -41,6 +41,7 @@ public class ClientLoggedGUI {
         pending.setLayout(new GridLayout(0, 1));
         friends.setLayout(new GridLayout(0, 1));
         Name.setText(nick);
+        window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
 
 
@@ -64,13 +65,14 @@ public class ClientLoggedGUI {
         ActionListener aListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if(tcp.accettaAmico(nick)){
+                tcp.accettaAmico(nick);
+                /*if(tcp.accettaAmico(nick)){
                    int index=getPendingTileIndex(nick);
-                    pending.remove(index);
+                    //pending.remove(index);
 
                     addFriendTile(nick);
 
-                }
+                }*/
 
             }
         };
@@ -79,12 +81,7 @@ public class ClientLoggedGUI {
         ActionListener dListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if(tcp.rifiutaAmico(nick)){
-                    int index=getPendingTileIndex(nick);
-                    pending.remove(index);
-                    pending.updateUI();
-
-                }
+                tcp.rifiutaAmico(nick);
 
             }
         };
@@ -125,9 +122,13 @@ public class ClientLoggedGUI {
 
     }
 
+    private void inizializzaSfida(){
+
+    }
+
 
     public void updateClassifica(List<String> list){
-
+    System.out.println("List Classifica: "+list.size());
         ClassificaList.setListData(list.toArray(new String[list.size()]));
         //ClassificaList.updateUI();
     }
@@ -135,5 +136,18 @@ public class ClientLoggedGUI {
     public void updateUI(){
         LoggedPanel.updateUI();
     }
+
+    public void clearPending(){
+        pending.removeAll();
+    }
+
+    public void clearFriend(){
+        friends.removeAll();
+    }
+
+    public void clearClassifica(){
+        ClassificaList.removeAll();
+    }
+
 
 }
