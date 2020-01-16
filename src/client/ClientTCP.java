@@ -94,7 +94,7 @@ public class ClientTCP implements Runnable{
      * @return il token per la sessione
      */
     public String login(String nick, String pw){
-        String message="LOGIN "+nick+" "+pw;
+        String message="LOGIN "+nick+" "+pw+" 1";
         send(message);
         String response=read();
         return response;

@@ -18,16 +18,18 @@ import java.util.concurrent.ConcurrentHashMap;
 
 //todo wait for reply (cosi non si accodano le risposte)
 public class WorkerTCP implements Runnable {
+
     private SelectionKey k;
     private int BUFFLEN=1024;
     private Selector selector;
     private Users users;
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
-    private ConcurrentHashMap<String, SelectionKey> keys;
+    //private ConcurrentHashMap<String, SelectionKey> keys;
+    private ConcurrentHashMap<String, DoubleVal<SelectionKey, Integer>> keys; //contiene Selection Key e UDP port
 
     public WorkerTCP(Selector s, SelectionKey k, Users users,
                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
-                     ConcurrentHashMap<String, SelectionKey> keys) {
+                     ConcurrentHashMap<String, DoubleVal<SelectionKey, Integer>> keys) {
         selector=s;
         this.k=k;
         this.usingK = usingK;
@@ -64,7 +66,7 @@ public class WorkerTCP implements Runnable {
             //todo cancellare sfide attive, logout, cancellare token
             String nick=keys.keySet()
                             .stream()
-                            .filter(key -> k.equals(keys.get(key)))
+                            .filter(key -> k.equals(keys.get(key).getFirst()))
                             .findFirst().get();
             logout(nick);
             k.cancel();
@@ -110,7 +112,8 @@ public class WorkerTCP implements Runnable {
      */
     public String login(String[] tokens, SelectionKey k)throws WrongCredException, UserNotExists, UserAlreadyLogged{
         String token=users.login(tokens[1], tokens[2]);
-        keys.put(tokens[1], k);
+        Integer port=Integer.valueOf(tokens[3]);
+        keys.put(tokens[1], new DoubleVal<SelectionKey, Integer>(k, port));
         return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
                 Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(tokens[1]).toJSONString()+" \n"+
                 Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(tokens[1]).toJSONString()+" \n" +
@@ -162,7 +165,7 @@ public class WorkerTCP implements Runnable {
             String response=Settings.RESPONSE.AMICIZIA+" "+users.getToken(tokens[1])+" "+tokens[3]+" ";
             switch(type){
                 case RICHIEDI:
-                    if(!richiediAmicizia(tokens[1], tokens[3])) {
+                    if(richiediAmicizia(tokens[1], tokens[3])) {
                         response += Settings.RSPType.RICHIESTA;
                     }
                     else{
@@ -193,19 +196,19 @@ public class WorkerTCP implements Runnable {
      * inoltra la richiesta di amicizia a friend
      * @param nick
      * @param friend
-     * @return true se accetta direttamente l'amicizia perchè già nei pending
+     * @return false se accetta direttamente l'amicizia perchè già nei pending
      */
     public boolean richiediAmicizia(String nick, String friend) throws FriendshipException, UserNotExists {
         //todo
         //todo inoltra la richiesta all'altro
         if(users.exists(friend) && !friend.equals(nick)) {
-            if(users.addPending(friend, nick)) { //aggiungo nick ai pending di friend
+            if(users.addPending(nick, friend)) { //aggiungo nick ai pending di friend
                 inoltraAmicizia(nick, friend, Settings.RSPType.RICHIESTA);
-                return false;
+                return true;
             }
             else{   //se invece era già presente accetto l'amicizia direttamente
                 accettaAmicizia(nick, friend);
-                return true;
+                return false;
             }
         }
         else{
@@ -239,7 +242,7 @@ public class WorkerTCP implements Runnable {
      */
     private boolean inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
         String request=Settings.REQUEST.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
-        SelectionKey k= keys.get(friend);
+        SelectionKey k= keys.get(friend).getFirst();
         if(k==null) return false; //se non è registrata la key non la inoltro (non è online)
         try {
             synchronized (usingK) {

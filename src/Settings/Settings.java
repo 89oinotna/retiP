@@ -31,15 +31,18 @@ public class Settings {
         RIFIUTA
     }
 
-    /**         RISPOSTE
+    /**                     RISPOSTE
      *
-     * FORMATO RISPOSTE:    OK AMICIZIA TOKEN FRIEND TYPE
-     *                      AMICI TOKEN JSON
-     *                      CLASSIFICA TOKEN JSON
-     *                      PENDING TOKEN JSON
+     *  Tutte le risposte a un comando sono precedute da OK/NOK
+     *  Le risposte asincrone no
+     *
+     *  FORMATO RISPOSTE:   OK AMICIZIA TOKEN FRIEND TYPE
      *                      OK SFIDA TOKEN NICK TYPE
      *                      OK TOKEN
      *                      NOK TOKEN ECCEZIONE
+     *                      AMICI TOKEN JSON
+     *                      CLASSIFICA TOKEN JSON
+     *                      PENDING TOKEN JSON
      */
     public enum RESPONSE{
         LOGIN,
