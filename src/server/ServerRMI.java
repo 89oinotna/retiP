@@ -32,6 +32,7 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
     public String registraUtente(String nickname, String password) throws RemoteException {
         //return ManagerRegistrazione.registraUtente(nickaname, password);
         try {
+            users.registraUtente(nickname, password);
             return "OK ";
         } catch (UserAlreadyExists e) {
             //e.printStackTrace();

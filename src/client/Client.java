@@ -187,7 +187,7 @@ public class Client {
             if(tokens[0].equals("OK")){
                 loggedNick=nick;
 
-                token=tokens[1];
+                token=tokens[2];
 
                 setLogged(token, nick);
                 //pendingSize=Integer.parseInt(tokens[2]);

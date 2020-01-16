@@ -124,9 +124,11 @@ public class User implements IUser {
 
     public void removePending(String friend){ pending.remove(friend); }
 
-    public List<String> getFriends() {  return new ArrayList<String>(friends.keySet());  }
+    public List<String> getFriends() {
+        return new ArrayList<String>(friends.keySet());
+    }
 
-    public List<String> getPendings(){ return new ArrayList<String>(friends.keySet()); }
+    public List<String> getPendings(){ return new ArrayList<String>(pending.keySet()); }
 
 
     /*                      JSON METHODS                        */

@@ -61,7 +61,7 @@ public class ServerTCP implements Runnable {
                 synchronized (usingK) {
                     if (usingK.putIfAbsent(k, k) == null) {
                         iterator.remove();
-                        WorkerTCP wrk = new WorkerTCP(selector, k, users, usingK);
+                        WorkerTCP wrk = new WorkerTCP(selector, k, users, usingK, keys);
                         executor.submit(wrk);
 
                     }

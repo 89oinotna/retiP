@@ -17,6 +17,21 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Users implements Serializable, IUsers {
     private ConcurrentHashMap<String, User> users;
     private List<String> dict; //concurrent //todo mi serve in users?
+    /**
+     * prende k parole random dal dizionario
+     * @return
+     */
+    private List<String> getParole() {
+        List<String> parole=new ArrayList<>(Settings.k);
+        for(int i=0; i<Settings.k; i++){
+            String parola=dict.get((int) (Math.random()*(dict.size()-1)));
+            while(parole.contains(parola)){
+                parola=dict.get((int) (Math.random()*(dict.size()-1)));
+            }
+            parole.add(parola);
+        }
+        return parole;
+    }
 
     public Users(List<String> dict) {
         users = new ConcurrentHashMap<>();
@@ -146,8 +161,8 @@ public class Users implements Serializable, IUsers {
        Challenge c;
        synchronized (users) {
            if (isLogged(nick) && isLogged(friend)) {
-               if (isInChallenge(nick) && isInChallenge(friend)) {
-                       c = new Challenge(nick, friend);
+               if (!isInChallenge(nick) && !isInChallenge(friend)) {
+                       c = new Challenge(nick, friend, getParole());
                        users.get(nick).setChallenge(c);
                        users.get(friend).setChallenge(c);
                } else

@@ -1,5 +1,6 @@
 package client;
 
+import Settings.Settings;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
@@ -105,7 +106,7 @@ public class ClientTCP implements Runnable{
         while(!Thread.currentThread().isInterrupted()){
 
             String response=read();
-            System.out.println("r"+response);
+            System.out.println("RESPONSE: "+response);
             manageCommand(response);
         }
     }
@@ -144,16 +145,18 @@ public class ClientTCP implements Runnable{
 
 
         String[] tokens=response.split(" ");
+        //quelli che iniziano con OK NOK sono in risposta a richieste
         if (tokens[0].equals("OK") || tokens[0].equals("NOK")) {
             synchronized (lastResponse) {
                 lastResponse.append(response);
                 lastResponse.notify();
             }
+
         }
 
         else if(tokens[1].equals(token)) { //validazione tramite token della risposta
 
-
+            //ASYNC
             switch (tokens[0]) {
                 //AMICIZIA TOKEN NICK TYPE
                 case "AMICIZIA":
@@ -214,7 +217,7 @@ public class ClientTCP implements Runnable{
                 for (Object s : array) {
                     //gui.addPendingFriendTile((String) s);
                     JSONObject amicoJSON=(JSONObject)s;
-                    String amico=amicoJSON.get("nick").toString() + amicoJSON.get("punteggio").toString();
+                    String amico=amicoJSON.get("nick").toString() + amicoJSON.get("score").toString();
                     if(!classificaList.contains(amico))classificaList.add(amico);
                 }
                 classificaList.notify();
@@ -247,11 +250,16 @@ public class ClientTCP implements Runnable{
     /**
      * Invia la richiesta di amicizia
      */
-    public void aggiungiAmico(String friend){
+    public String aggiungiAmico(String friend){
         //todo get from tb
-        String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RICHIESTA";
+        String request= Settings.REQUEST.AMICIZIA+" " +loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RICHIEDI;
         send(request);
         String response=getResponse();
+        //potrebbe averla accettata direttamente
+        String tokens[]=response.split(" ");
+
+        if(tokens.length>3 && tokens[1].equals("AMICIZIA") && tokens[4].equals("ACCETTATA")) manageAmicizia(tokens[3], tokens[4]);
+        return response;
 
         //response OK
         //response NOK eccezione
@@ -263,7 +271,7 @@ public class ClientTCP implements Runnable{
      */
     public boolean accettaAmico(String friend) {
 
-        String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" ACCETTA";
+        String request= Settings.REQUEST.AMICIZIA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
         send(request);
         String[] tokens=getResponse().split(" ");
         if(tokens[0].equals("OK")){
@@ -324,10 +332,10 @@ public class ClientTCP implements Runnable{
     }
 
     /**
-     * Richiede la lista delle richieste di amicizia in sospeso
+     * Richiede le informazioni di tipo type sull'utente
      */
-    public void getPendingFriends(String nick, String token){
-        String request = "GET "+nick+" "+token+" PENDING FRIENDS";
+    public void getRequest(Settings.GetType type){
+        String request = Settings.REQUEST.GET+" "+loggedNick+" "+token+" "+type;
         send(request);
         //todo server return json object
         //response OK LIST ...
@@ -356,10 +364,16 @@ public class ClientTCP implements Runnable{
 
                 break;
             case "ACCETTATA":
+                synchronized (pendingFriendsList) {
+                    if(pendingFriendsList.remove(friend))
+                        pendingFriendsList.notify();
+                }
                 synchronized (friendsList) {
                     friendsList.add(friend);
                     friendsList.notify();
                 }
+                //get classifica
+                getRequest(Settings.GetType.CLASSIFICA);
                 //todo gui.addFriendTile(friend);
                 break;
             case "RIFIUTATA":

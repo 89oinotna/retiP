@@ -25,7 +25,9 @@ public class WorkerTCP implements Runnable {
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
     private ConcurrentHashMap<String, SelectionKey> keys;
 
-    public WorkerTCP(Selector s, SelectionKey k, Users users, ConcurrentHashMap<SelectionKey, SelectionKey> usingK, ConcurrentHashMap<String, SelectionKey> keys) {
+    public WorkerTCP(Selector s, SelectionKey k, Users users,
+                     ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
+                     ConcurrentHashMap<String, SelectionKey> keys) {
         selector=s;
         this.k=k;
         this.usingK = usingK;
@@ -39,25 +41,32 @@ public class WorkerTCP implements Runnable {
                 accept(k);
             } else if (k.isReadable()) {
                 String command = read(k);
-                System.out.println(command);
-                String response = null;
-                try {
-                    response = manageCommand(command, k);
+                if(command.length()>0) {
+                    System.out.println("REQUEST: " + command);
+                    String response = null;
+                    try {
+                        response = manageCommand(command, k);
 
-                }catch(Exception e){
-                    response=e.toString().split(":")[0];
-                }
-                finally{
-                    if(response!=null) {
-                        System.out.println("Response: "+ response);
-                        send(k, response+ "\n");
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                        response = Settings.RESPONSE.NOK + " " + e.toString().split(":")[0];
+                    } finally {
+                        if (response != null) {
+                            System.out.println("Response: " + response);
+                            send(k, response + "\n");
+                        }
                     }
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             System.out.println("Disconnected");
             //todo cancellare sfide attive, logout, cancellare token
+            String nick=keys.keySet()
+                            .stream()
+                            .filter(key -> k.equals(keys.get(key)))
+                            .findFirst().get();
+            logout(nick);
             k.cancel();
         }
         finally {
@@ -74,12 +83,12 @@ public class WorkerTCP implements Runnable {
         Settings.REQUEST r = Settings.REQUEST.valueOf(tokens[0]);
         switch(r){
             case LOGIN:
-                return login(tokens, k);
+                return Settings.RESPONSE.OK+" "+login(tokens, k);
             case SFIDA:
                 //todo update della classifica per tutti i client amici
-                return sfida(tokens);
+                return Settings.RESPONSE.OK+" "+sfida(tokens);
             case AMICIZIA:
-                return amicizia(tokens);
+                return Settings.RESPONSE.OK+" "+amicizia(tokens);
             case GET:
                 return get(tokens);
 
@@ -102,11 +111,15 @@ public class WorkerTCP implements Runnable {
     public String login(String[] tokens, SelectionKey k)throws WrongCredException, UserNotExists, UserAlreadyLogged{
         String token=users.login(tokens[1], tokens[2]);
         keys.put(tokens[1], k);
-        return  Settings.RESPONSE.OK+" "+ token+" \n"+
+        return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
                 Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(tokens[1]).toJSONString()+" \n"+
                 Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(tokens[1]).toJSONString()+" \n" +
                 Settings.RESPONSE.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(tokens[1]).toJSONString();
 
+    }
+
+    public void logout(String nick){
+        users.logout(nick);
     }
 
     /**
@@ -146,20 +159,29 @@ public class WorkerTCP implements Runnable {
     public String amicizia(String[] tokens) throws FriendshipException, WrongCredException, UserNotExists {
         if (users.validateToken(tokens[1], tokens[2])){
             Settings.RQTType type= Settings.RQTType.valueOf(tokens[4]);
+            String response=Settings.RESPONSE.AMICIZIA+" "+users.getToken(tokens[1])+" "+tokens[3]+" ";
             switch(type){
                 case RICHIEDI:
-                    richiediAmicizia(tokens[1], tokens[3]);
+                    if(!richiediAmicizia(tokens[1], tokens[3])) {
+                        response += Settings.RSPType.RICHIESTA;
+                    }
+                    else{
+                        response+=Settings.RSPType.ACCETTATA;
+                    }
                     break;
                 case ACCETTA:
                     accettaAmicizia(tokens[1], tokens[3]);
+                    response+=Settings.RSPType.ACCETTATA;
                     break;
                 case RIFIUTA:
                     //rimuovo dalla pending
                     users.removePending(tokens[1], tokens[3]);
+                    response+=Settings.RSPType.RIFIUTATA;
+                    break;
+                default:
                     break;
             }
-
-            return "OK";
+            return response;
         }
         else{
             throw new WrongCredException();
@@ -171,7 +193,7 @@ public class WorkerTCP implements Runnable {
      * inoltra la richiesta di amicizia a friend
      * @param nick
      * @param friend
-     * @return false se non la riesce a chiedere online
+     * @return true se accetta direttamente l'amicizia perchè già nei pending
      */
     public boolean richiediAmicizia(String nick, String friend) throws FriendshipException, UserNotExists {
         //todo
@@ -179,7 +201,7 @@ public class WorkerTCP implements Runnable {
         if(users.exists(friend) && !friend.equals(nick)) {
             if(users.addPending(friend, nick)) { //aggiungo nick ai pending di friend
                 inoltraAmicizia(nick, friend, Settings.RSPType.RICHIESTA);
-                return true;
+                return false;
             }
             else{   //se invece era già presente accetto l'amicizia direttamente
                 accettaAmicizia(nick, friend);
@@ -213,45 +235,65 @@ public class WorkerTCP implements Runnable {
      * @param nick
      * @param friend
      * @param type
+     * @return true se la inoltra, false altrimenti
      */
-    private void inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
+    private boolean inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
         String request=Settings.REQUEST.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
         SelectionKey k= keys.get(friend);
-        if(k==null) return; //se non è registrata la key non la inoltro (non è online)
+        if(k==null) return false; //se non è registrata la key non la inoltro (non è online)
         try {
             synchronized (usingK) {
                 while (usingK.putIfAbsent(k, k) != null) {
                     usingK.wait();
                 }
             }
+
             try {
                 send(k, request + "\n");
-            } catch (Exception e) {
-                e.printStackTrace();
+            }catch (IOException e){
+                    //e.printStackTrace();
+                    System.out.println("Disconnected");
+                    //todo cancellare sfide attive, logout, cancellare token
+                    String n=keys.keySet()
+                            .stream()
+                            .filter(key -> k.equals(keys.get(key)))
+                            .findFirst().get();
+                    logout(n);
+                    k.cancel();
+
+                    return false;
+
             }
+
             synchronized (usingK) {
                 usingK.remove(k);
                 usingK.notify();
             }
+            return true;
         } catch (InterruptedException e) {
             e.printStackTrace();
+            return false;
         }
     }
 
-
+    /**
+     *
+     * @param tokens
+     * @return Restituisce lista amici, classifica o lista richieste
+     * @throws UserNotExists se l'utente non esiste
+     */
     private String get(String[] tokens) throws UserNotExists {
-        switch(tokens[3]){
-            case "AMICI":
-                break;
-            case "CLASSIFICA":
-                return "CLASSIFICA "+ users.getToken(tokens[1])+" "+ users.mostraClassifica(tokens[1]).toJSONString();
-
-            case "PENDING":
-                break;
+        Settings.GetType type=Settings.GetType.valueOf(tokens[3]);
+        switch(type){
+            case AMICI:
+                return Settings.GetType.AMICI+" "+ users.getToken(tokens[1])+" "+ users.listaAmici(tokens[1]).toJSONString();
+            case CLASSIFICA:
+                return Settings.GetType.CLASSIFICA+" "+ users.getToken(tokens[1])+" "+ users.mostraClassifica(tokens[1]).toJSONString();
+            case PENDING:
+                return Settings.GetType.PENDING+" "+ users.getToken(tokens[1])+" "+ users.listaRichieste(tokens[1]).toJSONString();
             default:
-                return "NOK";
+                return null;
         }
-        return "";
     }
 
     /**

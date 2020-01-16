@@ -91,56 +91,6 @@ public class Server {
         //s.save();
     }
 
-    public void test1() {
-        int i = 0;
-        /**
-         * test per registra utente
-         */
-        this.u.registraUtente("antonio", "asd");    //nuovo utente
-        try {
-            this.u.registraUtente("antonio", "asd");
-        }   //utente già registrato
-        catch (UserAlreadyExists e) {
-            i++;
-            assert (i == 1);
-        }
-        this.u.registraUtente("alfredo", "asd1");   //nuovo utente
 
-
-        /**
-         * test per login utente
-         */
-        //todo se è gia loggato e si logga con pw sbagliata dico che è già online o che la password è sbagliata?
-        //assert (!this.u.loginUtente("antonio", "asd1")); //password errata
-        //assert (this.u.loginUtente("antonio", "asd")); //tutto corretto
-        //assert (!this.u.loginUtente("antonio", "asd"));   //utente loggato
-        //assert (!this.u.loginUtente("giovanni", "asd")); //utente che non esiste
-
-        /**
-         * test per logout utente
-         */
-        this.u.logoutUtente("antonio");
-        this.u.logoutUtente("antonio");
-        //assert (this.u.loginUtente("antonio", "asd")); //tutto corretto
-
-        /**
-         * test aggiunta amico
-         */
-        try {
-            this.u.aggiungiAmicizia("antonio", "pasquale");
-        }   //amico non esiste
-        catch (UserNotExists e) {
-            i++;
-            assert (i == 2);
-        }
-
-        this.u.aggiungiAmicizia("antonio", "alfredo"); //amico esistente
-
-        /**
-         * test punteggio
-         */
-        this.u.aggiornaPunteggio("antonio", 10);
-        assert (this.u.mostraPunteggio("antonio") == 10);
-    }
 
 }

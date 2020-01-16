@@ -8,12 +8,14 @@ public class Settings {
     /**          COMANDI
      *
      * FORMATO COMANDI:     LOGIN NICK PW
+     *                      LOGOUT NICK TOKEN
      *                      SFIDA NICK TOKEN FRIEND
      *                      AMICIZIA NICK TOKEN FRIEND TYPE
      *                      GET NICK TOKEN TYPE
      */
     public enum REQUEST {
         LOGIN,
+        LOGOUT,
         SFIDA,
         AMICIZIA,
         GET
@@ -31,15 +33,16 @@ public class Settings {
 
     /**         RISPOSTE
      *
-     * FORMATO RISPOSTE:    AMICIZIA TOKEN NICK TYPE
+     * FORMATO RISPOSTE:    OK AMICIZIA TOKEN FRIEND TYPE
      *                      AMICI TOKEN JSON
      *                      CLASSIFICA TOKEN JSON
      *                      PENDING TOKEN JSON
-     *                      SFIDA TOKEN NICK TYPE
+     *                      OK SFIDA TOKEN NICK TYPE
      *                      OK TOKEN
      *                      NOK TOKEN ECCEZIONE
      */
     public enum RESPONSE{
+        LOGIN,
         AMICIZIA,
         AMICI,
         CLASSIFICA,

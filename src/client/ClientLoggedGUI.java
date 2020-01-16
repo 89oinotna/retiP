@@ -8,7 +8,6 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.List;
-import java.util.Vector;
 
 public class ClientLoggedGUI {
     private JPanel Friend;
@@ -16,11 +15,11 @@ public class ClientLoggedGUI {
     private JPanel Menu;
     private JScrollPane pendingRequest;
     private JScrollPane friendsScroll;
-    private JTextField AddFiendTB;
-    private JButton AddBT;
+    private JTextField addFriendTB;
+    private JButton addBT;
     private JPanel AddFriendP;
     private JLabel Name;
-    private JButton button1;
+    private JButton logoutButton;
     private JList ClassificaList;
     private JScrollPane Classifica;
     private JPanel LoggedPanel;
@@ -43,6 +42,13 @@ public class ClientLoggedGUI {
         Name.setText(nick);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
+        addBT.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                manageResponse(tcp.aggiungiAmico(addFriendTB.getText()));
+            }
+        });
+
 
 
 
@@ -50,7 +56,19 @@ public class ClientLoggedGUI {
     }
 
 
+    public void manageResponse(String response){
+        String[] tokens=response.split(" ");
+        if(tokens[0].equals("OK")){
+            JOptionPane.showMessageDialog(window, tokens[0]);
+        }
+        else if(tokens[0].equals("NOK")){
+            JOptionPane.showMessageDialog(window, tokens[1]);
+        }
+        else{
 
+        }
+
+    }
 
     /**
      * Aggiunge alla lista delle richieste ricevute
