@@ -25,11 +25,11 @@ public class WorkerTCP implements Runnable {
     private Users users;
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
     //private ConcurrentHashMap<String, SelectionKey> keys;
-    private ConcurrentHashMap<String, DoubleVal<SelectionKey, Integer>> keys; //contiene Selection Key e UDP port
+    private ConcurrentHashMap<String, SelectionKey> keys; //contiene Selection Key e UDP port
 
     public WorkerTCP(Selector s, SelectionKey k, Users users,
                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
-                     ConcurrentHashMap<String, DoubleVal<SelectionKey, Integer>> keys) {
+                     ConcurrentHashMap<String, SelectionKey> keys) {
         selector=s;
         this.k=k;
         this.usingK = usingK;
@@ -61,14 +61,15 @@ public class WorkerTCP implements Runnable {
                 }
             }
         } catch (IOException e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             System.out.println("Disconnected");
             //todo cancellare sfide attive, logout, cancellare token
-            String nick=keys.keySet()
+            /*String nick=keys.keySet()
                             .stream()
                             .filter(key -> k.equals(keys.get(key).getFirst()))
-                            .findFirst().get();
-            logout(nick);
+                            .findFirst().get();*/
+
+            logout(((MyAttachment)k.attachment()).getNick());
             k.cancel();
         }
         finally {
@@ -113,7 +114,8 @@ public class WorkerTCP implements Runnable {
     public String login(String[] tokens, SelectionKey k)throws WrongCredException, UserNotExists, UserAlreadyLogged{
         String token=users.login(tokens[1], tokens[2]);
         Integer port=Integer.valueOf(tokens[3]);
-        keys.put(tokens[1], new DoubleVal<SelectionKey, Integer>(k, port));
+        keys.put(tokens[1], k);
+        ((MyAttachment)k.attachment()).setNick(tokens[1]).setPort(port);
         return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
                 Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(tokens[1]).toJSONString()+" \n"+
                 Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(tokens[1]).toJSONString()+" \n" +
@@ -242,7 +244,7 @@ public class WorkerTCP implements Runnable {
      */
     private boolean inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
         String request=Settings.REQUEST.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
-        SelectionKey k= keys.get(friend).getFirst();
+        SelectionKey k= keys.get(friend);
         if(k==null) return false; //se non è registrata la key non la inoltro (non è online)
         try {
             synchronized (usingK) {
@@ -257,11 +259,8 @@ public class WorkerTCP implements Runnable {
                     //e.printStackTrace();
                     System.out.println("Disconnected");
                     //todo cancellare sfide attive, logout, cancellare token
-                    String n=keys.keySet()
-                            .stream()
-                            .filter(key -> k.equals(keys.get(key)))
-                            .findFirst().get();
-                    logout(n);
+
+                    logout(((MyAttachment)k.attachment()).getNick());
                     k.cancel();
 
                     return false;
@@ -311,7 +310,9 @@ public class WorkerTCP implements Runnable {
         System.out.println("Accepted connection from " + client);
         client.configureBlocking(false);
         ByteBuffer buffer = ByteBuffer.allocate(BUFFLEN);
-        SelectionKey cK = client.register(selector, SelectionKey.OP_READ, buffer);
+        //todo attach nick e port
+        MyAttachment att=new MyAttachment(buffer);
+        SelectionKey cK = client.register(selector, SelectionKey.OP_READ, att);
 
     }
 
@@ -325,7 +326,7 @@ public class WorkerTCP implements Runnable {
         //todo scanner
         StringBuilder request = new StringBuilder();
         SocketChannel client = (SocketChannel) k.channel();
-        ByteBuffer buffer = (ByteBuffer) k.attachment();
+        ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
 
 
         //Scanner scanner = new Scanner(client.socket());
@@ -358,7 +359,7 @@ public class WorkerTCP implements Runnable {
     public void send(SelectionKey k, String response) throws IOException {
         //todo send scrittura multiplo di BUFFLEN
         SocketChannel client = (SocketChannel) k.channel();
-        ByteBuffer buffer = (ByteBuffer) k.attachment();
+        ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
         int written = 0;
         //todo align response to kBUFFLEN
         response.length();
