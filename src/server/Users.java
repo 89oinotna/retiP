@@ -1,6 +1,7 @@
 package server;
 
 
+import Settings.Settings;
 import exceptions.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
@@ -174,8 +175,13 @@ public class Users implements Serializable, IUsers {
 
     }
 
+    public Challenge getChallenge(String nick){
+        return users.get(nick).getChallenge();
+    }
+
     public boolean isInChallenge(String nick){
-        return users.get(nick).getChallenge() != null;
+        Challenge c=users.get(nick).getChallenge();
+        return  c != null && c.isActive() ;
     }
 
     public int aggiornaPunteggio(String nick, int punteggio)throws UserNotExists {

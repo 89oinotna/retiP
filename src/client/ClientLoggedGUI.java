@@ -1,12 +1,10 @@
 package client;
 
-import client.customComponents.FriendRequestTile;
-import client.customComponents.FriendTile;
+import client.customComponents.*;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
+import java.awt.event.*;
 import java.util.List;
 
 public class ClientLoggedGUI {
@@ -25,50 +23,57 @@ public class ClientLoggedGUI {
     private JPanel LoggedPanel;
     private JPanel pending;
     private JPanel friends;
+    private JScrollPane SfideScroll;
+    private JPanel Sfide;
     private ClientTCP tcp;
+    private ClientUDP udp;
 
     private JFrame window;
 
-    public ClientLoggedGUI(ClientTCP tcp, String nick){
+    public ClientLoggedGUI(ClientTCP tcp, ClientUDP udp, String nick){
         this.tcp=tcp;
-
-        window = new JFrame("ClientGUI");
+        this.udp=udp;
+        window = new JFrame("ClientLoggedGUI");
         window.setContentPane(this.LoggedPanel);
         window.setSize(800,600);
+        Menu.setPreferredSize(new Dimension((int)(window.getWidth()*0.3), Menu.getHeight()));
+        Main.setPreferredSize(new Dimension((int)(window.getWidth()*0.3), Main.getHeight()));
+        Main.setLayout(new GridLayout(1,1));
+        Friend.setPreferredSize(new Dimension((int)(window.getWidth()*0.3), Friend.getHeight()));
+        Classifica.setPreferredSize(new Dimension(Classifica.getWidth(), (int)(Menu.getHeight()*0.2)));
+        SfideScroll.setPreferredSize(new Dimension(SfideScroll.getWidth(), (int)(Menu.getHeight()*0.2)));
+        pendingRequest.setPreferredSize(new Dimension(pendingRequest.getWidth(), (int)(Friend.getHeight()*0.2)));
+        friendsScroll.setPreferredSize(new Dimension(friendsScroll.getWidth(), (int)(Friend.getHeight()*0.2)));
+        //pending.setPreferredSize(new Dimension(pendingRequest.getWidth(), pending.getHeight()));
+        pending.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
+        friends.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
+        Sfide.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
         window.setLocation(100,100);
         window.setVisible(true);
-        pending.setLayout(new GridLayout(0, 1));
-        friends.setLayout(new GridLayout(0, 1));
+        //pending.setLayout(new GridBagLayout());
+        //friends.setLayout(new GridLayout(0, 1));
         Name.setText(nick);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         addBT.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                manageResponse(tcp.aggiungiAmico(addFriendTB.getText()));
+                String response=tcp.aggiungiAmico(addFriendTB.getText());
+                String[] tokens=response.split(" ");
+                if(tokens[0].equals("OK")){
+                    JOptionPane.showMessageDialog(window, tokens[0]);
+                }
+                else if(tokens[0].equals("NOK")){
+                    JOptionPane.showMessageDialog(window, tokens[1]);
+                }
             }
         });
 
 
 
-
-
     }
 
 
-    public void manageResponse(String response){
-        String[] tokens=response.split(" ");
-        if(tokens[0].equals("OK")){
-            JOptionPane.showMessageDialog(window, tokens[0]);
-        }
-        else if(tokens[0].equals("NOK")){
-            JOptionPane.showMessageDialog(window, tokens[1]);
-        }
-        else{
-
-        }
-
-    }
 
     /**
      * Aggiunge alla lista delle richieste ricevute
@@ -103,6 +108,7 @@ public class ClientLoggedGUI {
 
             }
         };
+
         pending.add(new FriendRequestTile(nick, aListener, dListener));
 
 
@@ -128,16 +134,33 @@ public class ClientLoggedGUI {
         ActionListener sListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if(true/*todo not in sfida*/){
-                    if(tcp.inviaSfida(nick)){
-                        //todo start sfida
-                    }
+                if(true/*todo not già richiesta*/){
+                    tcp.inviaSfida(nick);
+
+
                 }
             }
         };
         friends.add(new FriendTile(nick, sListener));
         //friends.updateUI();
 
+    }
+
+    public void addSfidaTile(String friend) {
+        ActionListener aListener= new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                //todo accetta sfida
+                udp.accettaSfida(friend);
+            }
+        };
+        ActionListener rListener= new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent actionEvent) {
+                udp.rifiutaSfida(friend);
+            }
+        };
+        Sfide.add(new RichiestaSfidaTile(friend, aListener, rListener));
     }
 
     private void inizializzaSfida(){
@@ -167,5 +190,34 @@ public class ClientLoggedGUI {
         ClassificaList.removeAll();
     }
 
+    public void clearRichiesteSfida() {
+        Sfide.removeAll();
+    }
 
+
+    public void initSfida(String friend, String parola) {
+        Main.removeAll();
+        SfidaTile s=new SfidaTile(friend, parola);
+        ActionListener sListener= new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                try {
+                    String word = tcp.inviaTraduzione(s.getTraduzione());
+                    if (word != null) {
+                        s.setWord(word);
+                    }
+                }catch (Exception ex){
+                    JOptionPane.showMessageDialog(window, ex.getMessage());
+                }
+
+            }
+        };
+        s.setListener(sListener);
+        Main.add(s);
+
+    }
+
+    public void endSfida() {
+        Main.removeAll();
+    }
 }

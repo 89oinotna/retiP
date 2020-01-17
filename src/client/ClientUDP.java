@@ -1,48 +1,115 @@
 package client;
 
+import Settings.Settings;
+
 import java.io.IOException;
 import java.net.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class ClientUDP {
-    private DatagramSocket cs;
-    private int port=8081;
+public class ClientUDP implements Runnable{
+    private DatagramSocket socket;
     private InetAddress IPAddress;
-    public ClientUDP(){
+    private ConcurrentHashMap<String, LocalDateTime> richiesteSfida;
+    private String loggedNick;
+    private String token;
 
-        try{
-            IPAddress = InetAddress.getByName("localhost");
-            cs=new DatagramSocket();
-            //cs.setSoTimeout(1000);
+    public void setLoggedInfo(String nick, String token){
+        loggedNick=nick;
+        this.token=token;
+    }
+
+    public ClientUDP(ConcurrentHashMap<String, LocalDateTime> richiesteSfida){
+        this.richiesteSfida=richiesteSfida;
+
+        try {
+            IPAddress=InetAddress.getByName(Settings.HOST_NAME);
+            socket = new DatagramSocket();
         } catch (SocketException | UnknownHostException e) {
             e.printStackTrace();
         }
+
+
+
     }
 
-    public void read() throws IOException {
+    public String read() throws IOException {
         byte[] receiveData = new byte[1024];
         DatagramPacket rPacket=new DatagramPacket(receiveData, receiveData.length);
-        try{
-            cs.receive(rPacket);
-            String response = new String(rPacket.getData());
+
+        socket.receive(rPacket);
+        return new String(rPacket.getData());
 
 
-        }catch (SocketTimeoutException e){
-            e.printStackTrace();
-        }
     }
 
     public void send(String s){
 
         byte[] sendData=s.getBytes();
-        DatagramPacket sPacket=new DatagramPacket(sendData, sendData.length, IPAddress, port);
+        DatagramPacket sPacket=new DatagramPacket(sendData, sendData.length, IPAddress, Settings.UDPPort);
         try {
-            cs.send(sPacket);
+            socket.send(sPacket);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public int getUdpPort(){
-        return cs.getLocalPort();
+        return socket.getLocalPort();
+    }
+
+    @Override
+    public void run() {
+        while(!Thread.currentThread().isInterrupted()){
+            try {
+                String r=read();
+                System.out.println(r);
+                String[] tokens=r.split(" ");
+                if(Settings.RESPONSE.valueOf(tokens[0]).equals(Settings.RESPONSE.SFIDA)){
+                    //todo valida token
+
+                    synchronized (richiesteSfida){
+                        richiesteSfida.put(tokens[3], LocalDateTime.now());
+                        richiesteSfida.notify();
+                    }
+                }
+
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public void accettaSfida(String friend) {
+        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
+        send(request);
+        synchronized (richiesteSfida){
+
+            richiesteSfida.remove(friend);
+            richiesteSfida.notify();
+        }
+
+
+    }
+
+    public void rifiutaSfida(String friend) {
+        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
+        send(request);
+
+        synchronized (richiesteSfida){
+
+            richiesteSfida.remove(friend);
+            richiesteSfida.notify();
+        }
+
+
     }
 }
+
+    /*public synchronized String getRequest(){
+        if(request.size()<1) return null;
+        return request.remove(0);
+    }*/
+

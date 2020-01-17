@@ -5,16 +5,18 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import server.ServerUdp;
+import server.UDP;
 
-import javax.swing.*;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 //LOGIN E REGISTRAZIONE WRITE E READ SERIALI NELLA STESSA FUNZIONE
 //ALTRI COMANDI:
@@ -28,16 +30,23 @@ public class ClientTCP implements Runnable{
     private List<String> friendsList;
     private List<String> classificaList;
     private String token;
-
+    private ConcurrentHashMap<String, LocalDateTime> richiesteSfida;
     private StringBuilder lastResponse;
     private String loggedNick;
+    private List<String> sfida;
 
-    private ServerUdp udp;
+    private UDP udp;
 
-    public ClientTCP(List<String> pendingFriendsList, List<String> friendsList, List<String> classificaList){
+    public ClientTCP(List<String> sfida,
+                     List<String> pendingFriendsList,
+                     List<String> friendsList,
+                     List<String> classificaList,
+                     ConcurrentHashMap<String, LocalDateTime> richiesteSfida){
+        this.sfida=sfida;
         this.pendingFriendsList=pendingFriendsList;
         this.friendsList=friendsList;
         this.classificaList=classificaList;
+        this.richiesteSfida=richiesteSfida;
         address = new InetSocketAddress("127.0.0.1", 8080);
         lastResponse=new StringBuilder();
 
@@ -75,6 +84,7 @@ public class ClientTCP implements Runnable{
 
     public void send(String message){
         //todo aggiusta
+        System.out.println("REQUEST: "+message);
         ByteBuffer buf = ByteBuffer.wrap((message+"  \n").getBytes());
         try {
             while (buf.hasRemaining()) {
@@ -93,8 +103,8 @@ public class ClientTCP implements Runnable{
      * @param pw
      * @return il token per la sessione
      */
-    public String login(String nick, String pw){
-        String message="LOGIN "+nick+" "+pw+" 1";
+    public String login(String nick, String pw, int udpPort){
+        String message="LOGIN "+nick+" "+pw+" "+udpPort;
         send(message);
         String response=read();
         return response;
@@ -118,6 +128,7 @@ public class ClientTCP implements Runnable{
     public synchronized String getResponse(){
 
         synchronized (lastResponse){
+            lastResponse.setLength(0);
             while(lastResponse.length()<1) {
                 try {
                     lastResponse.wait();
@@ -146,11 +157,12 @@ public class ClientTCP implements Runnable{
 
         String[] tokens=response.split(" ");
         //quelli che iniziano con OK NOK sono in risposta a richieste
-        if (tokens[0].equals("OK") || tokens[0].equals("NOK")) {
+        if ((tokens[0].equals("OK") || tokens[0].equals("NOK")) && tokens[2].equals(token)) {
             synchronized (lastResponse) {
                 lastResponse.append(response);
                 lastResponse.notify();
             }
+
 
         }
 
@@ -175,7 +187,12 @@ public class ClientTCP implements Runnable{
                     managePendingFriends(tokens[2]);
                     break;
                 case "SFIDA":
-                    //manageSfida();
+                    try {
+                        String parola = tokens[4];
+                        manageSfida(tokens[2], tokens[3], parola);
+                    }catch(IndexOutOfBoundsException e){
+                        manageSfida(tokens[2], tokens[3], null);
+                    }
                     break;
 
 
@@ -192,13 +209,58 @@ public class ClientTCP implements Runnable{
 
     }
 
+    /**
+     * invia la sfida ad un amico
+     * @param friend
+     * @return true se accettata, false altrimenti
+     */
+    public void inviaSfida(String friend){
+        String request="SFIDA "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RICHIEDI;
+        send(request);
+
+    }
+
+    private void manageSfida(String friend, String type, String parola) {
+        //todo per accettare vado nella pagina delle richieste??
+
+        switch(Settings.SFIDA.valueOf(type)){
+            case ACCETTATA:
+
+                break;
+            case RIFIUTATA:
+                synchronized (richiesteSfida) {
+                    if(richiesteSfida.remove(friend)!=null)
+                        richiesteSfida.notify();
+                }
+                break;
+            case INIZIATA:
+                if(parola!=null) {
+                    synchronized (sfida) {
+                        if (sfida.isEmpty()) {
+                            sfida.add(friend);
+                            sfida.add(parola);
+                            sfida.notify();
+                        }
+                    }
+                }
+                break;
+            case TERMINATA:
+                synchronized (sfida) {
+                    if(sfida.size()>0) {
+                        sfida.clear();
+                        sfida.notify();
+                    }
+                }
+                break;
+        }
+
+    }
+
     private void manageAmici(String json) {
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             synchronized (friendsList){
                 for (Object s:array) {
-                //TODO NOTIFY AMICI
-                //gui.addFriendTile((String)s);
 
                     friendsList.add((String) s);
                 }
@@ -210,7 +272,6 @@ public class ClientTCP implements Runnable{
     }
 
     private void manageClassifica(String json) {
-        //todo parse json and update gui
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             synchronized (classificaList) {
@@ -251,7 +312,6 @@ public class ClientTCP implements Runnable{
      * Invia la richiesta di amicizia
      */
     public String aggiungiAmico(String friend){
-        //todo get from tb
         String request= Settings.REQUEST.AMICIZIA+" " +loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RICHIEDI;
         send(request);
         String response=getResponse();
@@ -285,8 +345,6 @@ public class ClientTCP implements Runnable{
                 friendsList.add(friend);
                 friendsList.notify();
             }
-            //todo aggiorna classifica
-
             getClassifica();
             return true;
         }
@@ -316,20 +374,7 @@ public class ClientTCP implements Runnable{
         return false;
     }
 
-    /**
-     * invia la sfida ad un amico
-     * @param friend
-     * @return true se accettata, false altrimenti
-     */
-    public boolean inviaSfida(String friend){
-        String request="SFIDA "+loggedNick+" "+token+" "+friend;
-        send(request);
-        //response OK AMICIZIA ACCETTATA/RIFIUTATA
-        //response NOK eccezione
-        String[] tokens=getResponse().split(" ");
-        return tokens[0].equals("OK");
 
-    }
 
     /**
      * Richiede le informazioni di tipo type sull'utente
@@ -393,7 +438,32 @@ public class ClientTCP implements Runnable{
         loggedNick=nick;
     }
 
-
-
+    /**
+     * Restituisce la nuova parola o null se la partita è terminata
+     * @param traduzione
+     * @return
+     */
+    public String inviaTraduzione(String traduzione) throws Exception{
+        String request=Settings.REQUEST.PAROLA+" "+loggedNick+" "+token+" "+traduzione;
+        send(request);
+        String response=getResponse();
+        String[] tokens=response.split(" ");
+        if(Settings.RESPONSE.valueOf(tokens[0]).equals(Settings.RESPONSE.OK)){
+            if(Settings.RESPONSE.valueOf(tokens[1]).equals(Settings.RESPONSE.SFIDA)
+                && Settings.SFIDA.valueOf(tokens[4]).equals(Settings.SFIDA.TERMINATA)){
+                synchronized (sfida) {
+                    if(sfida.size()>0) {
+                        sfida.clear();
+                        sfida.notify();
+                    }
+                }
+                return null;
+            }
+            else if(Settings.RESPONSE.valueOf(tokens[1]).equals(Settings.RESPONSE.PAROLA)){
+                return tokens[3];
+            }
+        }
+        throw new Exception(response);
+    }
 }
 

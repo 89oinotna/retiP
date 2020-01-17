@@ -4,13 +4,13 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
 
-public class FriendRequestTile extends JPanel implements CustomTile {
+public class RichiestaSfidaTile extends JPanel implements CustomTile {
 
     private JLabel name;
     private JButton acceptBT;
     private JButton declineBT;
 
-    public FriendRequestTile(String name, ActionListener aListener, ActionListener dListener){
+    public RichiestaSfidaTile(String name, ActionListener aListener, ActionListener dListener){
 
         this.name=new JLabel(name);
         acceptBT=new JButton();

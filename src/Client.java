@@ -155,7 +155,7 @@ public class Client {
         String nick=nbIO.getLineBlocking();
         System.out.println("Inserisci la password");
         String pw=nbIO.getLineBlocking();
-        String response=tcp.login(nick, pw);
+        String response=tcp.login(nick, pw, 1);
         String[] tokens=response.split(" ");
         if(tokens[0].equals("OK")){
             loggedNick=nick;

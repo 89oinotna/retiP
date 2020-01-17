@@ -4,23 +4,23 @@ import java.nio.ByteBuffer;
 
 public class MyAttachment{
     private String nick;
-    private Integer port;
+    private Integer UDPport;
     private ByteBuffer buffer;
 
     MyAttachment(ByteBuffer b){
         buffer=b;
     }
 
-    public Integer getPort() {
-        return port;
+    public Integer getUDPPort(){
+        return UDPport;
     }
 
     public String getNick() {
         return nick;
     }
 
-    public MyAttachment setPort(Integer port) {
-        this.port=port;
+    public MyAttachment setUDPPort(Integer port) {
+        this.UDPport=port;
         return this;
     }
 

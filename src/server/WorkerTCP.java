@@ -1,19 +1,17 @@
 package server;
 
-import exceptions.FriendshipException;
-import exceptions.UserAlreadyLogged;
-import exceptions.UserNotExists;
-import exceptions.WrongCredException;
+import exceptions.*;
 
 import Settings.Settings;
 
 import java.io.IOException;
+import java.net.*;
 import java.nio.ByteBuffer;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.nio.channels.ServerSocketChannel;
-import java.nio.channels.SocketChannel;
+import java.nio.channels.*;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ConcurrentHashMap;
 
 //todo wait for reply (cosi non si accodano le risposte)
@@ -26,7 +24,7 @@ public class WorkerTCP implements Runnable {
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
     //private ConcurrentHashMap<String, SelectionKey> keys;
     private ConcurrentHashMap<String, SelectionKey> keys; //contiene Selection Key e UDP port
-
+    private String token;
     public WorkerTCP(Selector s, SelectionKey k, Users users,
                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
                      ConcurrentHashMap<String, SelectionKey> keys) {
@@ -35,6 +33,7 @@ public class WorkerTCP implements Runnable {
         this.usingK = usingK;
         this.users = users;
         this.keys=keys;
+        token=null;
     }
 
     public void run() {
@@ -50,8 +49,8 @@ public class WorkerTCP implements Runnable {
                         response = manageCommand(command, k);
 
                     } catch (Exception e) {
-                        e.printStackTrace();
-                        response = Settings.RESPONSE.NOK + " " + e.toString().split(":")[0];
+                        //e.printStackTrace();
+                        response = Settings.RESPONSE.NOK +" " + e.toString().split(":")[0]+ " "+token;
                     } finally {
                         if (response != null) {
                             System.out.println("Response: " + response);
@@ -61,16 +60,16 @@ public class WorkerTCP implements Runnable {
                 }
             }
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace();
             System.out.println("Disconnected");
             //todo cancellare sfide attive, logout, cancellare token
             /*String nick=keys.keySet()
                             .stream()
                             .filter(key -> k.equals(keys.get(key).getFirst()))
                             .findFirst().get();*/
-
-            logout(((MyAttachment)k.attachment()).getNick());
             k.cancel();
+            logout(((MyAttachment)k.attachment()).getNick());
+
         }
         finally {
             synchronized (usingK) {
@@ -80,20 +79,23 @@ public class WorkerTCP implements Runnable {
 
     }
 
-    public String manageCommand(String cmd, SelectionKey k) throws FriendshipException, UserNotExists, WrongCredException, UserAlreadyLogged {
+    public String manageCommand(String cmd, SelectionKey k) throws FriendshipException, UserNotExists, WrongCredException, UserAlreadyLogged, UserNotOnline, UserAlreadyInGame, ChallengeException {
         //todo mandare la porta udp al login
         String[] tokens=cmd.split(" ");
+        token=tokens[2];
         Settings.REQUEST r = Settings.REQUEST.valueOf(tokens[0]);
         switch(r){
             case LOGIN:
                 return Settings.RESPONSE.OK+" "+login(tokens, k);
             case SFIDA:
                 //todo update della classifica per tutti i client amici
-                return Settings.RESPONSE.OK+" "+sfida(tokens);
+                return sfida(tokens);
             case AMICIZIA:
                 return Settings.RESPONSE.OK+" "+amicizia(tokens);
             case GET:
                 return get(tokens);
+            case PAROLA:
+                return Settings.RESPONSE.OK+" "+word(tokens);
 
             /*case "PAROLA":
                 //parola nick token parola
@@ -104,6 +106,55 @@ public class WorkerTCP implements Runnable {
         return null;
     }
 
+    /**
+     * Gestisce l'ivio di una parola della sfida
+     * @return
+     */
+    private String word(String[] tokens) throws UserNotExists, ChallengeException {
+        if(users.validateToken(tokens[1], tokens[2])){
+            Challenge c=users.getChallenge(tokens[1]);
+            if(c==null) throw new ChallengeException();
+            String nextWord=c.tryWord(tokens[1], tokens[3]);
+            if(nextWord!=null){
+                return Settings.RESPONSE.PAROLA+" "+tokens[2]+" "+nextWord;
+            }
+            else{ //sfida terminata
+                //todo inoltrare all'avversario
+                String friend=c.getOpponent(tokens[1]);
+                inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA);
+                return Settings.RESPONSE.SFIDA+" "+token+" "+friend+" "+Settings.SFIDA.TERMINATA;
+            }
+        }
+        throw new WrongCredException();
+    }
+
+    public void inoltraTermineSfida(String nick, String friend, Settings.SFIDA type) throws UserNotExists {
+        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type;
+        SelectionKey k= keys.get(friend);
+        if(k==null) return ; //se non è registrata la key non la inoltro (non è online)
+        //try {
+            /*synchronized (usingK) {
+                while (usingK.putIfAbsent(k, k) != null) {
+                    usingK.wait();
+                }
+            }*/
+
+            try {
+                send(k, request + "\n");
+            }catch (IOException e){
+
+            }
+
+            /*synchronized (usingK) {
+                usingK.remove(k);
+                usingK.notify();
+            }*/
+
+        /*} catch (InterruptedException e) {
+            e.printStackTrace();
+
+        }*/
+    }
 
     /**
      * Gestisce la richiesta di login
@@ -115,7 +166,7 @@ public class WorkerTCP implements Runnable {
         String token=users.login(tokens[1], tokens[2]);
         Integer port=Integer.valueOf(tokens[3]);
         keys.put(tokens[1], k);
-        ((MyAttachment)k.attachment()).setNick(tokens[1]).setPort(port);
+        ((MyAttachment)k.attachment()).setNick(tokens[1]).setUDPPort(port);
         return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
                 Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(tokens[1]).toJSONString()+" \n"+
                 Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(tokens[1]).toJSONString()+" \n" +
@@ -132,33 +183,76 @@ public class WorkerTCP implements Runnable {
      * @param tokens
      * @return true false
      */
-    public String sfida(String[] tokens){
-        /*InetAddress IPAddress = null;
-        try {
-            IPAddress = InetAddress.getByName("localhost");
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        }
-        String msg="SFIDA "+i+" "+ System.currentTimeMillis();
-        byte[] sendData=msg.getBytes();
-        DatagramPacket sPacket=new DatagramPacket(sendData, sendData.length, IPAddress, port);
-        cs.send(sPacket);
-        if (users.validateToken(tokens[1], tokens[2]) ){
+    public String sfida(String[] tokens) throws UserNotOnline, UserNotExists, UserAlreadyInGame {
+        if (users.validateToken(tokens[1], tokens[2])){
+            switch (Settings.RQTType.valueOf(tokens[4])) {
+                case RICHIEDI:
+                    //todo accettarla direttamente se già richiesta??
+                    try {
+                        if (inoltraRichiestaSfida(tokens[1], tokens[3])) {
+                            Challenge c = users.sfida(tokens[1], tokens[3]);
+                            //schedulo il timer di chiusura sfida
+                            Timer t = new Timer();
+                            TimerTask tt = new TimerChallenge(keys.get(tokens[1]), keys.get(tokens[3]), c, users);
+                            t.schedule(tt, Settings.timer);
 
-            try{
-                users.sfida(tokens[1], tokens[3]);}
-            catch(UserNotOnline e){
-                return "NOK UserNotOnline";
-            }
-            catch(UserAlreadyInGame e){
-                return "NOK UserAlreadyInGame";
-            }
-            return "OK";
+                            //todo send ad entrambi sfida iniziata
+                            //todo usingk
+                            send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
+                                    " " + tokens[1] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0)+"\n");
+                            return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0);
+
+                        } else {
+
+
+                        }
+                    } catch (IOException e) {
+                        throw new UserNotOnline();
+                    }
+             }
+             throw  new IllegalArgumentException();
         }
-        else{
-            return "NOK";
-        }*/
-        return null;
+        else
+            throw new WrongCredException();
+    }
+
+
+
+    /**
+     * Inoltra la sfida su udp a friend
+     * @return true se la accetta, false se la rifiuta
+     */
+    public boolean inoltraRichiestaSfida(String nick, String friend) throws IOException, UserNotExists, UserNotOnline {
+        if(!users.isLogged(friend)) throw new UserNotOnline();
+        DatagramSocket udpClient = new DatagramSocket(8081);
+        udpClient.setSoTimeout(Settings.UDP_TIMEOUT);
+
+        InetAddress address = InetAddress.getByName(Settings.HOST_NAME);
+        String msg = Settings.RESPONSE.SFIDA+" "+friend+" "+
+                users.getToken(friend)+" "+nick+" \n";
+        byte[] msgSfida = msg.getBytes(StandardCharsets.UTF_8);
+        DatagramPacket packet = new DatagramPacket(msgSfida, msgSfida.length, address,
+                ((MyAttachment)keys.get(friend).attachment()).getUDPPort());
+        udpClient.send(packet);
+
+        byte[] ack = new byte[1024];
+        DatagramPacket rcvPck = new DatagramPacket(ack, ack.length);
+
+        try {
+            //todo validate response
+            udpClient.receive(rcvPck);
+            msg = new String(rcvPck.getData());
+        } catch (SocketTimeoutException e) {
+            //e.printStackTrace();
+            udpClient.close();
+            return false;
+        }
+        //todo manage response
+        System.out.println("UDP RESPONSE:"+msg);
+        udpClient.close();
+
+
+        return true;
     }
 
     public String amicizia(String[] tokens) throws FriendshipException, WrongCredException, UserNotExists {
@@ -205,7 +299,7 @@ public class WorkerTCP implements Runnable {
         //todo inoltra la richiesta all'altro
         if(users.exists(friend) && !friend.equals(nick)) {
             if(users.addPending(nick, friend)) { //aggiungo nick ai pending di friend
-                inoltraAmicizia(nick, friend, Settings.RSPType.RICHIESTA);
+                inoltraAmicizia(nick, friend,  Settings.RSPType.RICHIESTA);
                 return true;
             }
             else{   //se invece era già presente accetto l'amicizia direttamente
@@ -243,7 +337,7 @@ public class WorkerTCP implements Runnable {
      * @return true se la inoltra, false altrimenti
      */
     private boolean inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
-        String request=Settings.REQUEST.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
+        String request=Settings.RESPONSE.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
         SelectionKey k= keys.get(friend);
         if(k==null) return false; //se non è registrata la key non la inoltro (non è online)
         try {
@@ -257,14 +351,11 @@ public class WorkerTCP implements Runnable {
                 send(k, request + "\n");
             }catch (IOException e){
                     //e.printStackTrace();
-                    System.out.println("Disconnected");
+                    /*System.out.println("Disconnected");
                     //todo cancellare sfide attive, logout, cancellare token
-
                     logout(((MyAttachment)k.attachment()).getNick());
-                    k.cancel();
-
+                    k.cancel();*/
                     return false;
-
             }
 
             synchronized (usingK) {
@@ -309,7 +400,7 @@ public class WorkerTCP implements Runnable {
         SocketChannel client = server.accept();
         System.out.println("Accepted connection from " + client);
         client.configureBlocking(false);
-        ByteBuffer buffer = ByteBuffer.allocate(BUFFLEN);
+        ByteBuffer buffer = ByteBuffer.allocate(Settings.TCPBUFFLEN);
         //todo attach nick e port
         MyAttachment att=new MyAttachment(buffer);
         SelectionKey cK = client.register(selector, SelectionKey.OP_READ, att);
@@ -328,9 +419,8 @@ public class WorkerTCP implements Runnable {
         SocketChannel client = (SocketChannel) k.channel();
         ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
 
-
         //Scanner scanner = new Scanner(client.socket());
-        //TODO lasciare nel buffer i comandi dopo \n
+        //TODO lasciare nel buffer i comandi dopo \n oppure invio la quantità da leggere
         int read = client.read(buffer);
         byte[] bytes;
         while (read > 0) {
@@ -365,9 +455,9 @@ public class WorkerTCP implements Runnable {
         response.length();
         byte[] b = response.getBytes();
         while ((b.length - written) > 0) { //ciclo fino a che non ho scritto tutto
-            if ((b.length - written) % BUFFLEN != 0)
-                buffer.put(Arrays.copyOfRange(b, written, (written) + ((b.length - written) % BUFFLEN)));
-            else buffer.put(Arrays.copyOfRange(b, written, (written) + BUFFLEN)); //copio una parte
+            if ((b.length - written) % buffer.capacity() != 0)
+                buffer.put(Arrays.copyOfRange(b, written, (written) + ((b.length - written) % buffer.capacity())));
+            else buffer.put(Arrays.copyOfRange(b, written, (written) + buffer.capacity())); //copio una parte
 
 
             buffer.flip();

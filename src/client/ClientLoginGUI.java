@@ -39,7 +39,6 @@ public class ClientLoginGUI {
                 manageResponse(response);
 
 
-
             }
         });
         loginBtn.addActionListener(new ActionListener() {

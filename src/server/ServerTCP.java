@@ -21,17 +21,19 @@ public class ServerTCP implements Runnable {
     private Users users;
     private ConcurrentHashMap<SelectionKey, SelectionKey> usingK; // mi serve perchè la select potrebbe restituirmi la stessa key mentre la sto gestendo nel worker
     private ConcurrentHashMap<String, SelectionKey> keys;
-
+    private UDP udp;
 
     public ServerTCP(int port, Users _users) {
         users = _users;
         usingK=new ConcurrentHashMap<>();
         executor= Executors.newCachedThreadPool();
         keys=new ConcurrentHashMap<>();
+        udp=new UDP();
         try {
             serverChannel = ServerSocketChannel.open();
             ServerSocket ss = serverChannel.socket(); //prendo la referencee al socket
             ss.bind(new InetSocketAddress(port)); //bindo la porta
+
             serverChannel.configureBlocking(false);
             selector = Selector.open();
             serverChannel.register(selector, SelectionKey.OP_ACCEPT); //registro il channel
@@ -39,6 +41,7 @@ public class ServerTCP implements Runnable {
         } catch (IOException e) {
             e.printStackTrace();
         }
+
     }
 
 
@@ -55,7 +58,6 @@ public class ServerTCP implements Runnable {
             Set<SelectionKey> readyK = selector.selectedKeys(); //prendo i pronti
             Iterator<SelectionKey> iterator = readyK.iterator();
             while (iterator.hasNext()) {
-
                 SelectionKey k = iterator.next();
                 //todo k non valida
                 synchronized (usingK) {

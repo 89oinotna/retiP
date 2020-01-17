@@ -4,21 +4,26 @@ public class Settings {
     public static final int RMIPort=8082;
     public static final int UDPPort=8081;
     public static final int TCPPort=8080;
+    public static final int TCPBUFFLEN=1024;
+    public static final String HOST_NAME="localhost";
+    //todo fix parola e sfida
 
-    /**          COMANDI
+    /**                     COMANDI
      *
      * FORMATO COMANDI:     LOGIN NICK PW
      *                      LOGOUT NICK TOKEN
-     *                      SFIDA NICK TOKEN FRIEND
+     *                      SFIDA NICK TOKEN FRIEND TYPE
      *                      AMICIZIA NICK TOKEN FRIEND TYPE
      *                      GET NICK TOKEN TYPE
+     *                      PAROLA NICK TOKEN PAROLA
      */
     public enum REQUEST {
         LOGIN,
         LOGOUT,
         SFIDA,
         AMICIZIA,
-        GET
+        GET,
+        PAROLA
     }
     public enum GetType {
         AMICI,
@@ -38,11 +43,14 @@ public class Settings {
      *
      *  FORMATO RISPOSTE:   OK AMICIZIA TOKEN FRIEND TYPE
      *                      OK SFIDA TOKEN NICK TYPE
+     *                      OK PAROLA TOKEN NEXTWORD
      *                      OK TOKEN
      *                      NOK TOKEN ECCEZIONE
-     *                      AMICI TOKEN JSON
+     *
+     *  RISPOSTE INOLTRATE: AMICI TOKEN JSON
      *                      CLASSIFICA TOKEN JSON
      *                      PENDING TOKEN JSON
+     *                      SFIDA NICK TOKEN (DA)FRIEND
      */
     public enum RESPONSE{
         LOGIN,
@@ -51,6 +59,7 @@ public class Settings {
         CLASSIFICA,
         PENDING,
         SFIDA,
+        PAROLA,
         OK,
         NOK
     }
@@ -64,4 +73,24 @@ public class Settings {
      *
      */
     public static final int k=10; //numero di parole utilizzate per la sfida
+
+    /**
+     *          UDP
+     */
+    public static int UDP_TIMEOUT=10000; //ms
+
+    /**
+     *          SFIDA
+     */
+    public enum SFIDA {
+        ACCETTATA,
+        RIFIUTATA,
+        INIZIATA,
+        TERMINATA
+    }
+    public static final long timer=60000;
+
+    public static final int X=3; //Traduzione corretta assegna X punti
+    public static final int Y=1; //Traduzione sbagliata toglie Y punti
+    public static final int Z=5; //Chi vince ottiene Z punti extra
 }
