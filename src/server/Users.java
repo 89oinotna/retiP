@@ -163,7 +163,7 @@ public class Users implements Serializable, IUsers {
        synchronized (users) {
            if (isLogged(nick) && isLogged(friend)) {
                if (!isInChallenge(nick) && !isInChallenge(friend)) {
-                       c = new Challenge(nick, friend, getParole());
+                       c = new Challenge(users.get(nick), users.get(friend), getParole());
                        users.get(nick).setChallenge(c);
                        users.get(friend).setChallenge(c);
                } else
@@ -187,7 +187,7 @@ public class Users implements Serializable, IUsers {
     public int aggiornaPunteggio(String nick, int punteggio)throws UserNotExists {
         try {
             return Objects.requireNonNull(users.computeIfPresent(nick, (key, oldU) -> {
-                oldU.setScore(punteggio);
+                oldU.addScore(punteggio);
                 return oldU;
             })).getScore();
         }catch (NullPointerException e){
@@ -271,5 +271,26 @@ public class Users implements Serializable, IUsers {
 
     public boolean containsPending(String nick, String friend) {
         return users.get(nick).getPendings().contains(friend);
+    }
+
+    //todo termina sfida
+
+    /**
+     * Termina la sfida e aggiorna i punteggi
+     * @param c
+     * @return true se la termina flase altrimenti
+     * @throws UserNotExists
+     */
+    public boolean terminaSfida(Challenge c) throws UserNotExists {
+        synchronized (c) {
+            if(c.endChallenge()){
+                List<String> users=c.getUsers();
+                aggiornaPunteggio(users.get(0), c.getScore(users.get(0)));
+                aggiornaPunteggio(users.get(1), c.getScore(users.get(1)));
+                return true;
+            }
+
+        }
+        return false;
     }
 }

@@ -202,10 +202,14 @@ public class ClientLoggedGUI {
             @Override
             public void actionPerformed(ActionEvent e) {
                 try {
-                    String word = tcp.inviaTraduzione(s.getTraduzione());
-                    if (word != null) {
-                        s.setWord(word);
+                    String r = tcp.inviaTraduzione(s.getTraduzione());
+                    try{
+                        Integer.parseInt(r);
+
+                    }catch(NumberFormatException ex){
+                        s.setWord(r);
                     }
+
                 }catch (Exception ex){
                     JOptionPane.showMessageDialog(window, ex.getMessage());
                 }
@@ -217,7 +221,14 @@ public class ClientLoggedGUI {
 
     }
 
-    public void endSfida() {
+    public void endSfida(String score) {
+        try{
+            int s=Integer.parseInt(score);
+            JOptionPane.showMessageDialog(window, "HAI TOTALIZZATO: "+s+" PUNTI");
+
+        } catch (NumberFormatException e) {
+            e.printStackTrace();
+        }
         Main.removeAll();
     }
 }

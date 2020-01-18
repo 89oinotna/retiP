@@ -31,16 +31,15 @@ public class TimerChallenge extends TimerTask {
     public void run() {
         //System.out.println("TIMERTASK");
         //se nessuno è arrivato alla fine scatta il timer
-        synchronized (c) {
-            if (c.isActive()) {
-                c.endChallenge();
-            }
-            else return;
+        try {
+            if(!users.terminaSfida(c)) return;
+        } catch (UserNotExists e) {
+            return;
         }
         try {
             String nick=((MyAttachment)k1.attachment()).getNick();
             String friend=((MyAttachment)k2.attachment()).getNick();
-            send(k1, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+"\n");
+            send(k1, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)+"\n");
         } catch (IOException e) {
             e.printStackTrace();
         } catch (UserNotExists e) {
@@ -50,7 +49,7 @@ public class TimerChallenge extends TimerTask {
         try {
             String nick=((MyAttachment)k2.attachment()).getNick();
             String friend=((MyAttachment)k1.attachment()).getNick();
-            send(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+"\n");
+            send(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)+"\n");
         } catch (IOException e) {
             e.printStackTrace();
         }catch (UserNotExists e) {

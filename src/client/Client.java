@@ -45,7 +45,7 @@ public class Client {
         rmi = new ClientRMI(8082);
         tcp=new ClientTCP(sfida, pendingFriendsList, friendsList, classificaList, richiesteSfida);
         udp=new ClientUDP(richiesteSfida);
-
+        //todo last response?? cosi posso fare show di NOK
 
 
     }
@@ -168,12 +168,16 @@ public class Client {
                         try {
 
                             c.sfida.wait();
-                            if(!c.sfida.isEmpty()) {
+                            if(c.sfida.isEmpty()){
+
+                            }
+                            else if(c.sfida.size()<3) {
                                 c.cloggedGUI.initSfida(c.sfida.get(0), c.sfida.get(1));
-                            }else
+                            }
+                            else
                             {
 
-                                c.cloggedGUI.endSfida();
+                                c.cloggedGUI.endSfida(c.sfida.get(2));
                             }
                             c.cloggedGUI.updateUI();
                         } catch (InterruptedException e) {

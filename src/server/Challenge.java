@@ -25,18 +25,27 @@ public class Challenge {
     //todo challenge factory?
     private static final int k = 10; //ms
     private static final int timer = 600; //ms
-    private List<String> nick;
+    private List<User> users;
     private int[] punteggio;
     private int[] wordN;
     private List<String> parole;
     private List<String> traduzioni;
     private AtomicBoolean active;
-    public Challenge(String n1, String n2, List<String> parole) {
-        nick=new ArrayList<>();
+    //todo aggiornare punteggi quando termina la sfida
+    public Challenge(User n1, User n2, List<String> parole) {
+        users=new ArrayList<>(){
+            @Override
+            public int indexOf(Object o) {
+                for (int i=0; i<users.size(); i++) {
+                    if(users.get(i).getNickname().equals(o)) return i;
+                }
+                return -1;
+            }
+        };
         traduzioni=new ArrayList<>();
         active=new AtomicBoolean(true);
-        nick.add(n1);
-        nick.add(n2);
+        users.add(n1);
+        users.add(n2);
         punteggio=new int[]{0 , 0};
         wordN=new int[]{0, 0};
         this.parole=parole;
@@ -49,12 +58,34 @@ public class Challenge {
         return active.get();
     }
 
-    public void endChallenge(){
-        active.set(false);
+    /**
+     * Aggiorna anche il punteggio per il vincitore
+     * In caso di pareggio nessuno riceve i punti extra
+     * @return true se è terminata false se già lo era
+     */
+    public boolean endChallenge(){
+        if(active.get()) {
+            active.set(false);
+            if (punteggio[0] > punteggio[1]) {
+                punteggio[0] += Settings.Z;
+
+            } else if (punteggio[1] > punteggio[0]) {
+                punteggio[1] += Settings.Z;
+
+            }
+            return true;
+        }
+        else return false;
     }
 
+    /**
+     * Return null se sono terminate le parole
+     * @param nick
+     * @param word
+     * @return
+     */
     public String tryWord(String nick, String word){
-        int i=nick.indexOf(nick);
+        int i=users.indexOf(nick);
         if(i!=-1){
             synchronized (active) {
                 if(active.get()) {
@@ -63,8 +94,10 @@ public class Challenge {
                     } else {
                         punteggio[i] -= Settings.Y;
                     }
+
                     if (wordN[i] == Settings.k) {
-                        endChallenge();
+                        //endChallenge();
+                        return null;
                     } else {
                         return parole.get(wordN[i]);
                     }
@@ -76,7 +109,7 @@ public class Challenge {
     }
 
     public int getScore(String nick) throws UserNotExists {
-        int i=nick.indexOf(nick);
+        int i=users.indexOf(nick);
         if(i!=-1){
             return punteggio[i];
         }
@@ -84,13 +117,13 @@ public class Challenge {
     }
 
     public String getOpponent(String nick) throws ChallengeException {
-        int i=this.nick.indexOf(nick);
+        int i=users.indexOf(nick);
         if (i != -1) {
             switch (i){
                 case 0:
-                    return this.nick.get(1);
+                    return users.get(1).getNickname();
                 case 1:
-                    return this.nick.get(0);
+                    return users.get(0).getNickname();
             }
 
         }
@@ -137,5 +170,13 @@ public class Challenge {
         }catch (ParseException e) {
             return null;
         }
+    }
+
+    public synchronized List<String> getUsers(){
+        List<String> r=new ArrayList<>();
+        for (User u:users) {
+            r.add(u.getNickname());
+        }
+        return r;
     }
 }

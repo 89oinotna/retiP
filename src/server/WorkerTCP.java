@@ -49,7 +49,7 @@ public class WorkerTCP implements Runnable {
                         response = manageCommand(command, k);
 
                     } catch (Exception e) {
-                        //e.printStackTrace();
+                        e.printStackTrace();
                         response = Settings.RESPONSE.NOK +" " + e.toString().split(":")[0]+ " "+token;
                     } finally {
                         if (response != null) {
@@ -120,16 +120,20 @@ public class WorkerTCP implements Runnable {
             }
             else{ //sfida terminata
                 //todo inoltrare all'avversario
+                users.terminaSfida(c);
                 String friend=c.getOpponent(tokens[1]);
-                inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA);
-                return Settings.RESPONSE.SFIDA+" "+token+" "+friend+" "+Settings.SFIDA.TERMINATA;
+
+                inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA, c.getScore(friend));
+                return Settings.RESPONSE.SFIDA+" "+token+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(tokens[1])+" \n"+
+                        Settings.RESPONSE.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(tokens[1]).toJSONString();
             }
         }
         throw new WrongCredException();
     }
 
-    public void inoltraTermineSfida(String nick, String friend, Settings.SFIDA type) throws UserNotExists {
-        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type;
+    public void inoltraTermineSfida(String nick, String friend, Settings.SFIDA type, int punteggio) throws UserNotExists {
+        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type+" "+punteggio+" \n"+
+                Settings.RESPONSE.CLASSIFICA+" "+ users.getToken(friend)+" "+ users.mostraClassifica(nick).toJSONString();
         SelectionKey k= keys.get(friend);
         if(k==null) return ; //se non è registrata la key non la inoltro (non è online)
         //try {

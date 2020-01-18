@@ -187,12 +187,9 @@ public class ClientTCP implements Runnable{
                     managePendingFriends(tokens[2]);
                     break;
                 case "SFIDA":
-                    try {
-                        String parola = tokens[4];
-                        manageSfida(tokens[2], tokens[3], parola);
-                    }catch(IndexOutOfBoundsException e){
-                        manageSfida(tokens[2], tokens[3], null);
-                    }
+
+                        manageSfida(tokens[2], tokens[3], tokens[4]);
+
                     break;
 
 
@@ -220,7 +217,7 @@ public class ClientTCP implements Runnable{
 
     }
 
-    private void manageSfida(String friend, String type, String parola) {
+    private void manageSfida(String friend, String type, String p) {
         //todo per accettare vado nella pagina delle richieste??
 
         switch(Settings.SFIDA.valueOf(type)){
@@ -234,20 +231,20 @@ public class ClientTCP implements Runnable{
                 }
                 break;
             case INIZIATA:
-                if(parola!=null) {
-                    synchronized (sfida) {
-                        if (sfida.isEmpty()) {
-                            sfida.add(friend);
-                            sfida.add(parola);
-                            sfida.notify();
-                        }
+
+                synchronized (sfida) {
+                    if (sfida.isEmpty()) {
+                        sfida.add(friend);
+                        sfida.add(p);
+                        sfida.notify();
                     }
                 }
+
                 break;
             case TERMINATA:
                 synchronized (sfida) {
                     if(sfida.size()>0) {
-                        sfida.clear();
+                        sfida.add(p);
                         sfida.notify();
                     }
                 }
@@ -260,6 +257,7 @@ public class ClientTCP implements Runnable{
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             synchronized (friendsList){
+                friendsList.clear();
                 for (Object s:array) {
 
                     friendsList.add((String) s);
@@ -275,11 +273,12 @@ public class ClientTCP implements Runnable{
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             synchronized (classificaList) {
+                classificaList.clear();
                 for (Object s : array) {
                     //gui.addPendingFriendTile((String) s);
                     JSONObject amicoJSON=(JSONObject)s;
                     String amico=amicoJSON.get("nick").toString() + amicoJSON.get("score").toString();
-                    if(!classificaList.contains(amico))classificaList.add(amico);
+                    classificaList.add(amico);
                 }
                 classificaList.notify();
             }
@@ -293,6 +292,7 @@ public class ClientTCP implements Runnable{
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
             //gui.setPendingRow(array.size());
             synchronized (pendingFriendsList) {
+                pendingFriendsList.clear();
                 for (Object s : array) {
                     //gui.addPendingFriendTile((String) s);
                     pendingFriendsList.add((String) s);
@@ -439,7 +439,7 @@ public class ClientTCP implements Runnable{
     }
 
     /**
-     * Restituisce la nuova parola o null se la partita è terminata
+     * Restituisce la nuova parola o il punteggio se la sfida è terminata
      * @param traduzione
      * @return
      */
@@ -453,11 +453,11 @@ public class ClientTCP implements Runnable{
                 && Settings.SFIDA.valueOf(tokens[4]).equals(Settings.SFIDA.TERMINATA)){
                 synchronized (sfida) {
                     if(sfida.size()>0) {
-                        sfida.clear();
+                        sfida.add(tokens[5]);
                         sfida.notify();
                     }
                 }
-                return null;
+                return tokens[5];
             }
             else if(Settings.RESPONSE.valueOf(tokens[1]).equals(Settings.RESPONSE.PAROLA)){
                 return tokens[3];

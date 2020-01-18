@@ -154,6 +154,7 @@ public class User implements IUser {
     }
 
 
-
-
+    public void addScore(int i) {
+        score+=i;
+    }
 }
