@@ -74,19 +74,19 @@ public class Settings {
      */
     public static final int k=10; //numero di parole utilizzate per la sfida
 
-    /**
-     *          UDP
-     */
-    public static int UDP_TIMEOUT=10000; //ms
+
 
     /**
      *          SFIDA
      */
+    public static int TIMEOUT=10000; //ms
     public enum SFIDA {
+        RICHIESTA,
         ACCETTATA,
         RIFIUTATA,
         INIZIATA,
-        TERMINATA
+        TERMINATA,
+        SCADUTA
     }
     public static final long timer=60000;
 

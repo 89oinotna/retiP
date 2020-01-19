@@ -187,8 +187,11 @@ public class ClientTCP implements Runnable{
                     managePendingFriends(tokens[2]);
                     break;
                 case "SFIDA":
-
+                    try {
                         manageSfida(tokens[2], tokens[3], tokens[4]);
+                    }catch(ArrayIndexOutOfBoundsException e){
+                        manageSfida(tokens[2], tokens[3], null);
+                    }
 
                     break;
 
@@ -225,6 +228,7 @@ public class ClientTCP implements Runnable{
 
                 break;
             case RIFIUTATA:
+            case SCADUTA:
                 synchronized (richiesteSfida) {
                     if(richiesteSfida.remove(friend)!=null)
                         richiesteSfida.notify();
@@ -464,6 +468,31 @@ public class ClientTCP implements Runnable{
             }
         }
         throw new Exception(response);
+    }
+
+    public void accettaSfida(String friend) {
+        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
+        send(request);
+        synchronized (richiesteSfida){
+
+            richiesteSfida.remove(friend);
+            richiesteSfida.notify();
+        }
+
+
+    }
+
+    public void rifiutaSfida(String friend) {
+        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
+        send(request);
+
+        synchronized (richiesteSfida){
+
+            richiesteSfida.remove(friend);
+            richiesteSfida.notify();
+        }
+
+
     }
 }
 

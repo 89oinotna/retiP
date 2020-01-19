@@ -136,7 +136,13 @@ public class ClientLoggedGUI {
             public void actionPerformed(ActionEvent actionEvent) {
                 if(true/*todo not già richiesta*/){
                     tcp.inviaSfida(nick);
-
+                    String[] tokens=tcp.getResponse().split(" ");
+                    if(tokens[0].equals("OK")){
+                        JOptionPane.showMessageDialog(window, tokens[0]);
+                    }
+                    else if(tokens[0].equals("NOK")){
+                        JOptionPane.showMessageDialog(window, tokens[1]);
+                    }
 
                 }
             }
@@ -151,13 +157,13 @@ public class ClientLoggedGUI {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 //todo accetta sfida
-                udp.accettaSfida(friend);
+                tcp.accettaSfida(friend);
             }
         };
         ActionListener rListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                udp.rifiutaSfida(friend);
+                tcp.rifiutaSfida(friend);
             }
         };
         Sfide.add(new RichiestaSfidaTile(friend, aListener, rListener));

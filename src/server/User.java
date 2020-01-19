@@ -17,6 +17,7 @@ public class User implements IUser {
     private boolean logged;
     private ConcurrentHashMap<String, String> friends;
     private ConcurrentHashMap<String, String> pending;
+    private ConcurrentHashMap<String, String> challengeRequest;
     private Challenge challenge;
     private SelectionKey k;
     private String token;
@@ -24,6 +25,7 @@ public class User implements IUser {
     public User(JSONObject user) {
         friends = new ConcurrentHashMap<>();
         pending=new ConcurrentHashMap<>();
+        challengeRequest=new ConcurrentHashMap<>();
         logged = false;
         token="";
         k=null;
@@ -49,6 +51,7 @@ public class User implements IUser {
         //logged = true; //si logga alla registrazione
         friends = new ConcurrentHashMap<>();
         pending=new ConcurrentHashMap<>();
+        challengeRequest=new ConcurrentHashMap<>();
         k=null;
 
     }
@@ -118,8 +121,10 @@ public class User implements IUser {
     public boolean removeFriend(String friend) { return (friends.remove(friend)) != null; }
 
     public boolean addPending(String friend) throws FriendshipException {
-        if(friends.contains(friend)) throw new FriendshipException("FriendshipExists");
-        return (pending.putIfAbsent(friend, friend))==null;
+
+        if(pending.putIfAbsent(friend, friend)==null)
+            return true;
+        throw new FriendshipException("FriendshipExists");
     }
 
     public void removePending(String friend){ pending.remove(friend); }
@@ -156,5 +161,27 @@ public class User implements IUser {
 
     public void addScore(int i) {
         score+=i;
+    }
+
+    public boolean hasChallengeRequest(String friend) {
+        return challengeRequest.get(friend)!=null;
+    }
+
+    public boolean addChallengeRequest(String friend){
+        return challengeRequest.putIfAbsent(friend, friend)==null;
+    }
+
+    /**
+     *
+     * @param friend
+     * @return true se è stato rimosso
+     */
+    public boolean removeChallengeRequest(String friend) {
+        return challengeRequest.remove(friend)!=null;
+    }
+
+
+    public boolean hasFriend(String friend) {
+        return friends.get(friend)!=null;
     }
 }

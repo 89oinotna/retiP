@@ -13,6 +13,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.time.LocalDateTime;
 import java.util.*;
 
 public class Server {
@@ -40,18 +41,42 @@ public class Server {
         }catch (Exception e){
             e.printStackTrace();
         }
-        try {
-                File file = new File("utenti.json");
-                Scanner ss = new Scanner(file);
+        long startTime = System.nanoTime();
+        try (FileInputStream in = new FileInputStream("utenti.json");
+             ) {
+            ByteArrayOutputStream out=new ByteArrayOutputStream();
+
+            byte[] byteArray = new byte[1024]; // byte-array
+            int bytesCount;
+            while ((bytesCount = in.read(byteArray)) != -1) {
+                out.write(byteArray, 0, bytesCount);}
+            long elapsedTime = System.nanoTime() - startTime;
+            System.out.println("Elapsed Time is " + (elapsedTime / 1000000.0)
+                    + " msec");
+            JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(out.toString()));
+            u = new Users(utentiJSON, dict);
+        } catch (IOException | ParseException ex) { ex.printStackTrace(); }
+        //try {
+
+                //File file = new File("utenti.json");
+
+               /* Scanner ss = new Scanner(file);
                 StringBuilder json=new StringBuilder();
-                while (ss.hasNext()) {
+
+
+            while (ss.hasNext()) {
                     json.append(ss.next());
-                }
-                JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json.toString()));
-                u = new Users(utentiJSON, dict);
-            } catch (FileNotFoundException | ParseException ex) {
-            ex.printStackTrace();
-        }
+                }*/
+
+
+            //StringBuilder json=new StringBuilder();
+                //JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json.toString()));
+                //u = new Users(utentiJSON, dict);
+            //} catch (FileNotFoundException ex) {
+            /*ex.printStackTrace();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }*/
 
 
         serverrmi = new ServerRMI(8082, u);

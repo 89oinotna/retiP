@@ -79,6 +79,7 @@ public class Client {
             public void run() {
                 while(!Thread.currentThread().isInterrupted()){
                     synchronized (c.friendsList){
+                        //todo aggiungere flag online?
                         try {
                             c.friendsList.wait();
                         } catch (InterruptedException e) {
@@ -178,6 +179,7 @@ public class Client {
                             {
 
                                 c.cloggedGUI.endSfida(c.sfida.get(2));
+                                c.sfida.clear();
                             }
                             c.cloggedGUI.updateUI();
                         } catch (InterruptedException e) {

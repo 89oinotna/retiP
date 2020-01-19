@@ -82,30 +82,7 @@ public class ClientUDP implements Runnable{
         }
     }
 
-    public void accettaSfida(String friend) {
-        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
-        send(request);
-        synchronized (richiesteSfida){
 
-            richiesteSfida.remove(friend);
-            richiesteSfida.notify();
-        }
-
-
-    }
-
-    public void rifiutaSfida(String friend) {
-        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
-        send(request);
-
-        synchronized (richiesteSfida){
-
-            richiesteSfida.remove(friend);
-            richiesteSfida.notify();
-        }
-
-
-    }
 }
 
     /*public synchronized String getRequest(){

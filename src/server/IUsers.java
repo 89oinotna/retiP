@@ -103,7 +103,7 @@ public interface IUsers {
      * @param nick
      * @param friend
      */
-    Challenge sfida(String nick, String friend) throws UserNotOnline, UserAlreadyInGame;
+    Challenge sfida(String nick, String friend) throws UserNotOnline, UserAlreadyInGame, ChallengeException;
 
 
 }

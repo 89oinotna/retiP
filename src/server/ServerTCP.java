@@ -50,6 +50,7 @@ public class ServerTCP implements Runnable {
         while (!Thread.currentThread().isInterrupted()) {
 
             try {
+                //todo
                 selector.selectNow(); //vedo quali sono pronti (selectNow non blocking)
             } catch (IOException e) {
                 e.printStackTrace();
@@ -63,7 +64,7 @@ public class ServerTCP implements Runnable {
                 synchronized (usingK) {
                     if (usingK.putIfAbsent(k, k) == null) {
                         iterator.remove();
-                        WorkerTCP wrk = new WorkerTCP(selector, k, users, usingK, keys);
+                        WorkerTCP wrk = new WorkerTCP(selector, k, users, usingK, keys, udp);
                         executor.submit(wrk);
 
                     }

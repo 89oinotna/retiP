@@ -9,9 +9,7 @@ import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Timer;
-import java.util.TimerTask;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 //todo wait for reply (cosi non si accodano le risposte)
@@ -21,14 +19,16 @@ public class WorkerTCP implements Runnable {
     private int BUFFLEN=1024;
     private Selector selector;
     private Users users;
+    private UDP udp;
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
     //private ConcurrentHashMap<String, SelectionKey> keys;
     private ConcurrentHashMap<String, SelectionKey> keys; //contiene Selection Key e UDP port
     private String token;
     public WorkerTCP(Selector s, SelectionKey k, Users users,
                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
-                     ConcurrentHashMap<String, SelectionKey> keys) {
+                     ConcurrentHashMap<String, SelectionKey> keys, UDP udp) {
         selector=s;
+        this.udp=udp;
         this.k=k;
         this.usingK = usingK;
         this.users = users;
@@ -60,7 +60,7 @@ public class WorkerTCP implements Runnable {
                 }
             }
         } catch (IOException e) {
-            //e.printStackTrace();
+            e.printStackTrace();
             System.out.println("Disconnected");
             //todo cancellare sfide attive, logout, cancellare token
             /*String nick=keys.keySet()
@@ -114,26 +114,43 @@ public class WorkerTCP implements Runnable {
         if(users.validateToken(tokens[1], tokens[2])){
             Challenge c=users.getChallenge(tokens[1]);
             if(c==null) throw new ChallengeException();
-            String nextWord=c.tryWord(tokens[1], tokens[3]);
-            if(nextWord!=null){
-                return Settings.RESPONSE.PAROLA+" "+tokens[2]+" "+nextWord;
-            }
-            else{ //sfida terminata
-                //todo inoltrare all'avversario
-                users.terminaSfida(c);
-                String friend=c.getOpponent(tokens[1]);
+            synchronized (c) {
+                String nextWord = c.tryWord(tokens[1], tokens[3]);
+                if (nextWord != null) {
+                    return Settings.RESPONSE.PAROLA + " " + tokens[2] + " " + nextWord;
+                } else { //sfida terminata
+                    //todo inoltrare all'avversario
+                    users.terminaSfida(c);
+                    String friend = c.getOpponent(tokens[1]);
+                    aggiornaClassificheAmici(tokens[1], friend);
+                    inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA, c.getScore(friend));
 
-                inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA, c.getScore(friend));
-                return Settings.RESPONSE.SFIDA+" "+token+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(tokens[1])+" \n"+
-                        Settings.RESPONSE.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(tokens[1]).toJSONString();
+                    return Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.TERMINATA + " " + c.getScore(tokens[1]);
+                }
             }
         }
         throw new WrongCredException();
     }
 
+    private void aggiornaClassificheAmici(String nick, String friend) throws UserNotExists {
+        List<String> friends=new ArrayList<>();
+        friends.addAll(users.getListaAmici(nick));
+        friends.addAll(users.getListaAmici(friend));
+        for (String f:friends) {
+            String response=Settings.GetType.CLASSIFICA+" "+ users.getToken(f)+" "+ users.mostraClassifica(f).toJSONString();
+            SelectionKey k= keys.get(f);
+            if(k==null) continue ;
+            try {
+                send(k, response + "\n");
+            }catch (IOException e){
+
+            }
+        }
+
+    }
+
     public void inoltraTermineSfida(String nick, String friend, Settings.SFIDA type, int punteggio) throws UserNotExists {
-        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type+" "+punteggio+" \n"+
-                Settings.RESPONSE.CLASSIFICA+" "+ users.getToken(friend)+" "+ users.mostraClassifica(nick).toJSONString();
+        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type+" "+punteggio;
         SelectionKey k= keys.get(friend);
         if(k==null) return ; //se non è registrata la key non la inoltro (non è online)
         //try {
@@ -187,33 +204,63 @@ public class WorkerTCP implements Runnable {
      * @param tokens
      * @return true false
      */
-    public String sfida(String[] tokens) throws UserNotOnline, UserNotExists, UserAlreadyInGame {
+    public String sfida(String[] tokens) throws UserNotOnline, UserNotExists, UserAlreadyInGame, ChallengeException {
         if (users.validateToken(tokens[1], tokens[2])){
             switch (Settings.RQTType.valueOf(tokens[4])) {
                 case RICHIEDI:
                     //todo accettarla direttamente se già richiesta??
                     try {
-                        if (inoltraRichiestaSfida(tokens[1], tokens[3])) {
-                            Challenge c = users.sfida(tokens[1], tokens[3]);
-                            //schedulo il timer di chiusura sfida
+                        if(!users.isInChallenge(tokens[1]) && !users.isInChallenge(tokens[3])
+                                && !users.hasChallengeRequest(tokens[1], tokens[3])
+                                && users.addPendingChallenge(tokens[1], tokens[3])) {
+
+                            inoltraRichiestaSfida(tokens[1], tokens[3]);
+                            //todo timer
                             Timer t = new Timer();
-                            TimerTask tt = new TimerChallenge(keys.get(tokens[1]), keys.get(tokens[3]), c, users);
-                            t.schedule(tt, Settings.timer);
-
-                            //todo send ad entrambi sfida iniziata
-                            //todo usingk
-                            send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
-                                    " " + tokens[1] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0)+"\n");
-                            return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0);
-
-                        } else {
-
-
+                            TimerTask tt = new TimerChallengeRequest(tokens[1], tokens[3], keys.get(tokens[1]), keys.get(tokens[3]), users);
+                            t.schedule(tt, Settings.TIMEOUT);
                         }
+                        return Settings.RESPONSE.OK+" "+Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.RICHIESTA;
                     } catch (IOException e) {
+                        users.removePendingChallenge(tokens[1], tokens[3]);
                         throw new UserNotOnline();
+                    } catch (UserNotExists | UserNotOnline e){
+                        users.removePendingChallenge(tokens[1], tokens[3]);
+
+                        throw e;
                     }
-             }
+                case ACCETTA:
+
+                        Challenge c = users.sfida(tokens[1], tokens[3]);
+                        //schedulo il timer di chiusura sfida
+
+                        Timer t = new Timer();
+                        TimerTask tt = new TimerChallengeEnd(keys.get(tokens[1]), keys.get(tokens[3]), c, users);
+                        t.schedule(tt, Settings.timer);
+                        //todo send ad entrambi sfida iniziata
+                        //todo usingk
+                        try{
+                            send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
+                                " " + tokens[1] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0)+"\n");
+
+                        }catch (IOException e){
+                            c.endChallenge();
+                            throw new UserNotOnline();
+                        }
+                        return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0);
+
+                case RIFIUTA:
+                    //from friend to me
+                    users.removePendingChallenge(tokens[3], tokens[1]);
+                    try{
+                    send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
+                            " " + tokens[1] + " " + Settings.SFIDA.RIFIUTATA+"\n");
+                    }catch (IOException ignored){
+
+                    }
+                    return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.RIFIUTATA;
+
+            }
              throw  new IllegalArgumentException();
         }
         else
@@ -222,40 +269,14 @@ public class WorkerTCP implements Runnable {
 
 
 
+
     /**
      * Inoltra la sfida su udp a friend
-     * @return true se la accetta, false se la rifiuta
+     * @return true se la inoltra
      */
     public boolean inoltraRichiestaSfida(String nick, String friend) throws IOException, UserNotExists, UserNotOnline {
         if(!users.isLogged(friend)) throw new UserNotOnline();
-        DatagramSocket udpClient = new DatagramSocket(8081);
-        udpClient.setSoTimeout(Settings.UDP_TIMEOUT);
-
-        InetAddress address = InetAddress.getByName(Settings.HOST_NAME);
-        String msg = Settings.RESPONSE.SFIDA+" "+friend+" "+
-                users.getToken(friend)+" "+nick+" \n";
-        byte[] msgSfida = msg.getBytes(StandardCharsets.UTF_8);
-        DatagramPacket packet = new DatagramPacket(msgSfida, msgSfida.length, address,
-                ((MyAttachment)keys.get(friend).attachment()).getUDPPort());
-        udpClient.send(packet);
-
-        byte[] ack = new byte[1024];
-        DatagramPacket rcvPck = new DatagramPacket(ack, ack.length);
-
-        try {
-            //todo validate response
-            udpClient.receive(rcvPck);
-            msg = new String(rcvPck.getData());
-        } catch (SocketTimeoutException e) {
-            //e.printStackTrace();
-            udpClient.close();
-            return false;
-        }
-        //todo manage response
-        System.out.println("UDP RESPONSE:"+msg);
-        udpClient.close();
-
-
+        udp.write(nick, friend, users.getToken(friend), ((MyAttachment)keys.get(friend).attachment()).getUDPPort());
         return true;
     }
 
@@ -302,13 +323,17 @@ public class WorkerTCP implements Runnable {
         //todo
         //todo inoltra la richiesta all'altro
         if(users.exists(friend) && !friend.equals(nick)) {
-            if(users.addPending(nick, friend)) { //aggiungo nick ai pending di friend
-                inoltraAmicizia(nick, friend,  Settings.RSPType.RICHIESTA);
-                return true;
-            }
-            else{   //se invece era già presente accetto l'amicizia direttamente
-                accettaAmicizia(nick, friend);
-                return false;
+            synchronized (users) {
+                if(!users.hasFriend(nick, friend)){
+                    if (!users.containsPending(nick, friend) && users.addPending(nick, friend)) { //aggiungo nick ai pending di friend
+                        inoltraAmicizia(nick, friend, Settings.RSPType.RICHIESTA);
+                        return true;
+                    } else {   //se invece era già presente accetto l'amicizia direttamente
+                        accettaAmicizia(nick, friend);
+                        return false;
+                    }
+                }
+                throw new FriendshipException("GIA AMICI");
             }
         }
         else{
@@ -457,6 +482,9 @@ public class WorkerTCP implements Runnable {
         int written = 0;
         //todo align response to kBUFFLEN
         response.length();
+
+        response="System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()";
+        long start= System.nanoTime();
         byte[] b = response.getBytes();
         while ((b.length - written) > 0) { //ciclo fino a che non ho scritto tutto
             if ((b.length - written) % buffer.capacity() != 0)
@@ -476,7 +504,10 @@ public class WorkerTCP implements Runnable {
 
             buffer.clear();
         }
-
+        long elap= System.nanoTime()- start;
+        System.out.println("0Elapsed Time is " + (elap / 1000000.0)
+                + " msec");
+         
     }
 
 }
