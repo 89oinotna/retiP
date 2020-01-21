@@ -5,6 +5,7 @@ import client.customComponents.*;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.IOException;
 import java.util.List;
 
 public class ClientLoggedGUI {
@@ -17,7 +18,7 @@ public class ClientLoggedGUI {
     private JButton addBT;
     private JPanel AddFriendP;
     private JLabel Name;
-    private JButton logoutButton;
+    private JButton logoutBT;
     private JList ClassificaList;
     private JScrollPane Classifica;
     private JPanel LoggedPanel;
@@ -26,13 +27,10 @@ public class ClientLoggedGUI {
     private JScrollPane SfideScroll;
     private JPanel Sfide;
     private ClientTCP tcp;
-    private ClientUDP udp;
-
     private JFrame window;
 
-    public ClientLoggedGUI(ClientTCP tcp, ClientUDP udp, String nick){
+    public ClientLoggedGUI(ClientTCP tcp, String nick){
         this.tcp=tcp;
-        this.udp=udp;
         window = new JFrame("ClientLoggedGUI");
         window.setContentPane(this.LoggedPanel);
         window.setSize(800,600);
@@ -44,28 +42,40 @@ public class ClientLoggedGUI {
         SfideScroll.setPreferredSize(new Dimension(SfideScroll.getWidth(), (int)(Menu.getHeight()*0.2)));
         pendingRequest.setPreferredSize(new Dimension(pendingRequest.getWidth(), (int)(Friend.getHeight()*0.2)));
         friendsScroll.setPreferredSize(new Dimension(friendsScroll.getWidth(), (int)(Friend.getHeight()*0.2)));
-        //pending.setPreferredSize(new Dimension(pendingRequest.getWidth(), pending.getHeight()));
         pending.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
         friends.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
         Sfide.setLayout(new VerticalFlowLayout(VerticalFlowLayout.RIGHT, VerticalFlowLayout.TOP));
         window.setLocation(100,100);
         window.setVisible(true);
-        //pending.setLayout(new GridBagLayout());
-        //friends.setLayout(new GridLayout(0, 1));
         Name.setText(nick);
         window.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
         addBT.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                String response=tcp.aggiungiAmico(addFriendTB.getText());
-                String[] tokens=response.split(" ");
-                if(tokens[0].equals("OK")){
-                    JOptionPane.showMessageDialog(window, tokens[0]);
+                try {
+                    String response = tcp.aggiungiAmico(addFriendTB.getText());
+                    String[] tokens = response.split(" ");
+                    if (tokens[0].equals("OK")) {
+                        JOptionPane.showMessageDialog(window, tokens[0]);
+                    } else if (tokens[0].equals("NOK")) {
+                        JOptionPane.showMessageDialog(window, tokens[1]);
+                    }
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
                 }
-                else if(tokens[0].equals("NOK")){
-                    JOptionPane.showMessageDialog(window, tokens[1]);
-                }
+            }
+        });
+
+        logoutBT.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+
+                tcp.logout();
+
+                //System.exit(1);
+                logout();
             }
         });
 
@@ -73,6 +83,9 @@ public class ClientLoggedGUI {
 
     }
 
+    public void close() {
+        window.dispose();
+    }
 
 
     /**
@@ -88,7 +101,12 @@ public class ClientLoggedGUI {
         ActionListener aListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                tcp.accettaAmico(nick);
+                try {
+                    tcp.accettaAmico(nick);
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
+                }
                 /*if(tcp.accettaAmico(nick)){
                    int index=getPendingTileIndex(nick);
                     //pending.remove(index);
@@ -104,7 +122,12 @@ public class ClientLoggedGUI {
         ActionListener dListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                tcp.rifiutaAmico(nick);
+                try {
+                    tcp.rifiutaAmico(nick);
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
+                }
 
             }
         };
@@ -134,9 +157,10 @@ public class ClientLoggedGUI {
         ActionListener sListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                if(true/*todo not già richiesta*/){
-                    tcp.inviaSfida(nick);
-                    String[] tokens=tcp.getResponse().split(" ");
+                try{
+
+
+                    String[] tokens=tcp.inviaSfida(nick).split(" ");
                     if(tokens[0].equals("OK")){
                         JOptionPane.showMessageDialog(window, tokens[0]);
                     }
@@ -144,6 +168,9 @@ public class ClientLoggedGUI {
                         JOptionPane.showMessageDialog(window, tokens[1]);
                     }
 
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
                 }
             }
         };
@@ -156,23 +183,35 @@ public class ClientLoggedGUI {
         ActionListener aListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                //todo accetta sfida
-                tcp.accettaSfida(friend);
+                try {
+
+                    String[] tokens=tcp.accettaSfida(friend).split(" ");
+                    if(tokens[0].equals("OK")){
+                        preparaSfida(friend);
+                        updateUI();
+                    }
+                    else if(tokens[0].equals("NOK")){
+                        JOptionPane.showMessageDialog(window, tokens[1]);
+                    }
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
+                }
             }
         };
         ActionListener rListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-                tcp.rifiutaSfida(friend);
+                try {
+                    tcp.rifiutaSfida(friend);
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
+                }
             }
         };
         Sfide.add(new RichiestaSfidaTile(friend, aListener, rListener));
     }
-
-    private void inizializzaSfida(){
-
-    }
-
 
     public void updateClassifica(List<String> list){
     System.out.println("List Classifica: "+list.size());
@@ -200,7 +239,6 @@ public class ClientLoggedGUI {
         Sfide.removeAll();
     }
 
-
     public void initSfida(String friend, String parola) {
         Main.removeAll();
         SfidaTile s=new SfidaTile(friend, parola);
@@ -216,8 +254,11 @@ public class ClientLoggedGUI {
                         s.setWord(r);
                     }
 
-                }catch (Exception ex){
+                }catch (IllegalArgumentException ex){
                     JOptionPane.showMessageDialog(window, ex.getMessage());
+                }catch(IOException ex){
+                    JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
+                    logout();
                 }
 
             }
@@ -227,14 +268,22 @@ public class ClientLoggedGUI {
 
     }
 
-    public void endSfida(String score) {
-        try{
-            int s=Integer.parseInt(score);
-            JOptionPane.showMessageDialog(window, "HAI TOTALIZZATO: "+s+" PUNTI");
-
-        } catch (NumberFormatException e) {
-            e.printStackTrace();
-        }
+    public void endSfida(int score) {
+        JOptionPane.showMessageDialog(window, "HAI TOTALIZZATO: "+score+" PUNTI");
         Main.removeAll();
+    }
+
+    public void preparaSfida(String friend) {
+        Main.removeAll();
+        SfidaTile s=new SfidaTile(friend);
+        Main.add(s);
+    }
+
+    private void logout(){
+        synchronized (tcp) {
+            tcp.setLoggedNick(null);
+            tcp.setToken(null);
+            tcp.notify();
+        }
     }
 }

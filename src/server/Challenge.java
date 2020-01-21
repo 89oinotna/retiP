@@ -11,28 +11,26 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
 import java.net.URL;
-import java.nio.channels.FileChannel;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
+import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.SocketChannel;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Scanner;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class Challenge {
-    //todo challenge factory?
-    private static final int k = 10; //ms
-    private static final int timer = 600; //ms
+public class Challenge extends IChallenge implements Runnable{
     private List<User> users;
     private int[] punteggio;
     private int[] wordN;
     private List<String> parole;
     private List<String> traduzioni;
     private AtomicBoolean active;
-    //todo aggiornare punteggi quando termina la sfida
-    public Challenge(User n1, User n2, List<String> parole) {
+    private static List<String> dict;
+    private SelectionKey k1;
+    private SelectionKey k2;
+
+    public Challenge(User n1, User n2) {
         users=new ArrayList<>(){
             @Override
             public int indexOf(Object o) {
@@ -48,22 +46,15 @@ public class Challenge {
         users.add(n2);
         punteggio=new int[]{0 , 0};
         wordN=new int[]{0, 0};
-        this.parole=parole;
-        for (String p:parole) {
-            traduzioni.add(richiediTraduzione(p));
-        }
+        this.parole=getParole();
+
     }
 
     public boolean isActive(){
         return active.get();
     }
 
-    /**
-     * Aggiorna anche il punteggio per il vincitore
-     * In caso di pareggio nessuno riceve i punti extra
-     * @return true se è terminata false se già lo era
-     */
-    public boolean endChallenge(){
+    public synchronized boolean endChallenge(){
         if(active.get()) {
             active.set(false);
             if (punteggio[0] > punteggio[1]) {
@@ -73,39 +64,13 @@ public class Challenge {
                 punteggio[1] += Settings.Z;
 
             }
+
+            users.get(0).addScore(punteggio[0]);
+            users.get(1).addScore(punteggio[1]);
+
             return true;
         }
         else return false;
-    }
-
-    /**
-     * Return null se sono terminate le parole
-     * @param nick
-     * @param word
-     * @return
-     */
-    public String tryWord(String nick, String word){
-        int i=users.indexOf(nick);
-        if(i!=-1){
-            synchronized (active) {
-                if(active.get()) {
-                    if (word.equals(traduzioni.get(wordN[i]++))) {
-                        punteggio[i] += Settings.X;
-                    } else {
-                        punteggio[i] -= Settings.Y;
-                    }
-
-                    if (wordN[i] == Settings.k) {
-                        //endChallenge();
-                        return null;
-                    } else {
-                        return parole.get(wordN[i]);
-                    }
-                }
-                else return null;
-            }
-        }
-        return null;
     }
 
     public int getScore(String nick) throws UserNotExists {
@@ -130,11 +95,44 @@ public class Challenge {
         throw new ChallengeException();
     }
 
+    /**
+     * Controlla se word corrisponde alla traduzione e aggiorna i punteggi
+     * @param nick che invia la traduzione
+     * @param word parola tradotta
+     * @return la prossima parola da tradurre, null se non ci sono piu parole o la sfida non è attiva
+     */
+    public String tryWord(String nick, String word){
+        int i=users.indexOf(nick);
+        if(i!=-1){
+            synchronized (active) {
+                if(active.get()) {
+                    if (word.equals(traduzioni.get(wordN[i]++))) {
+                        punteggio[i] += Settings.X;
+                    } else {
+                        punteggio[i] -= Settings.Y;
+                    }
+
+                    if (wordN[i] == Settings.k) {
+                        return null;
+                    } else {
+                        return parole.get(wordN[i]);
+                    }
+                }
+                else return null;
+            }
+        }
+        return null;
+    }
 
     public String getWord(int i) {
         return this.parole.get(i);
     }
 
+    /**
+     * Effettua la traduzione della parola
+     * @param parola parola da tradurre
+     * @return parola tradotta, null se non riesce a tradurla
+     */
     private String richiediTraduzione(String parola){
 
         try {
@@ -163,6 +161,11 @@ public class Challenge {
         }
     }
 
+    /**
+     * Estrapola la parola tradotta da output
+     * @param output json risultato della richesta API
+     * @return traduzione
+     */
     private String parseOutput(String output) {
         try {
             JSONObject response = (JSONObject) new JSONParser().parse(output);
@@ -172,11 +175,71 @@ public class Challenge {
         }
     }
 
-    public synchronized List<String> getUsers(){
-        List<String> r=new ArrayList<>();
-        for (User u:users) {
-            r.add(u.getNickname());
+    /**
+     * Prende k parole diverse random dal dizionario
+     * @return lista delle parole
+     */
+    private List<String> getParole() {
+        List<String> parole=new ArrayList<>(Settings.k);
+        for(int i=0; i<Settings.k; i++){
+            String parola=dict.get((int) (Math.random()*(dict.size()-1)));
+            while(parole.contains(parola)){
+                parola=dict.get((int) (Math.random()*(dict.size()-1)));
+            }
+            parole.add(parola);
         }
-        return r;
+        return parole;
+    }
+
+    /**
+     * Creazione del dizionario
+     * @param dict lista delle parole
+     */
+    public static void setDict(List<String> dict){
+        Challenge.dict =dict;
+    }
+
+    @Override
+    public void run() {
+        for (String p:parole) {
+            //todo gestione return null
+            try {
+                traduzioni.add(richiediTraduzione(p));
+            }catch(NullPointerException ignored){}
+        }
+        MyAttachment ak1=((MyAttachment)k1.attachment());
+        MyAttachment ak2=((MyAttachment)k2.attachment());
+        try {
+            send(k1, Settings.RESPONSE.SFIDA + " " + ak1.getToken() +
+                    " " + ak2.getNick() + " " + Settings.SFIDA.INIZIATA + " " + getWord(0) + "\n");
+        }catch (IOException ignored){
+        }
+        try {
+            send(k2, Settings.RESPONSE.SFIDA + " " + ak2.getToken() +
+                    " " + ak1.getNick() + " " + Settings.SFIDA.INIZIATA+" "+getWord(0)+"\n");
+        } catch (IOException ignored) {
+        }
+    }
+
+    public void setKeys(SelectionKey k1, SelectionKey k2){
+        this.k1=k1;
+        this.k2=k2;
+    }
+
+    /**
+     * Scrive sul channell associato a k
+     *
+     * @param k
+     * @param response
+     * @throws IOException
+     */
+    public void send(SelectionKey k, String response) throws IOException {
+        System.out.println("TIMER RESPONSE: "+response);
+        //todo send scrittura multiplo di BUFFLEN
+        SocketChannel client = (SocketChannel) k.channel();
+        ByteBuffer buf = ByteBuffer.wrap( response.getBytes() );
+        while(buf.hasRemaining()){
+            client.write(buf);
+        }
     }
 }

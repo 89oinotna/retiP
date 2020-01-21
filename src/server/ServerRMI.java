@@ -12,17 +12,16 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
     Users users;
     int port;
 
-    public ServerRMI(int _port, Users _users) {
+    public ServerRMI(int port, Users users) {
         try {
-            users = _users;
-            port = _port;
+            this.users = users;
+            this.port = port;
             //porta 0 indica la porta std RMI  n
             IServerRMI stub = (IServerRMI) UnicastRemoteObject.exportObject(this, 0);
             LocateRegistry.createRegistry(port);
             Registry r = LocateRegistry.getRegistry(port);
             r.rebind("GAME-SERVER", stub);
             System.out.println("Server ready");
-
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -30,7 +29,6 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
 
     @Override
     public String registraUtente(String nickname, String password) throws RemoteException {
-        //return ManagerRegistrazione.registraUtente(nickaname, password);
         try {
             users.registraUtente(nickname, password);
             return "OK ";
@@ -38,8 +36,6 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
             //e.printStackTrace();
             return "NOK "+e.toString().split(":")[0];
         }
-
-        //todo gestire eccezione e ritornare valore
     }
 
 

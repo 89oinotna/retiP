@@ -1,12 +1,8 @@
 package server;
 
-
-import Settings.Settings;
 import exceptions.*;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
-
-import java.io.Serializable;
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -14,39 +10,20 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-//todo serve serializable per rmi?
-public class Users implements Serializable, IUsers {
-    private ConcurrentHashMap<String, User> users;
-    private List<String> dict; //concurrent //todo mi serve in users?
-    /**
-     * prende k parole random dal dizionario
-     * @return
-     */
-    private List<String> getParole() {
-        List<String> parole=new ArrayList<>(Settings.k);
-        for(int i=0; i<Settings.k; i++){
-            String parola=dict.get((int) (Math.random()*(dict.size()-1)));
-            while(parole.contains(parola)){
-                parola=dict.get((int) (Math.random()*(dict.size()-1)));
-            }
-            parole.add(parola);
-        }
-        return parole;
-    }
 
-    public Users(List<String> dict) {
-        users = new ConcurrentHashMap<>();
-        this.dict=dict;
-    }
+public class Users implements IUsers {
 
-    public Users(JSONArray usersJSON, List<String> dict) {
-        users = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, User> users;
+
+    public Users(JSONArray usersJSON) {
+        users=new ConcurrentHashMap<>();
         for (Object utenteJSON : usersJSON) {
             User curr = new User((JSONObject) utenteJSON);
             users.put(curr.getNickname(), curr);
         }
-        this.dict=dict;
-
+    }
+    public Users() {
+        users=new ConcurrentHashMap<>();
     }
 
     public void registraUtente(String nick, String pw) throws UserAlreadyExists {
@@ -56,7 +33,6 @@ public class Users implements Serializable, IUsers {
     }
 
     public String login(String nick, String pw) throws UserNotExists, WrongCredException, UserAlreadyLogged {
-        //todo loggo o no se sono loggato già
         String token = generateToken(nick, pw);
         if(users.computeIfPresent(nick, (key, oldU) -> {
             if(oldU.getPassword().equals(pw)){  //Controllo la password
@@ -79,15 +55,31 @@ public class Users implements Serializable, IUsers {
             oldU.logout();
             return oldU;
         });
+    }
 
+    public boolean isLogged(String nick){
+        return users.get(nick).isLogged();
+    }
+
+    public boolean exists(String nick) {
+        return users.get(nick)!=null;
+    }
+
+
+    /**
+     * Restituisce un iteratore sugli utenti
+     */
+    public Iterator<User> getIterator() {
+        return users.values().iterator();
     }
 
     /*                      AMICIZIA                        */
 
-    public void aggiungiAmico(String nick, String friend) throws UserNotExists {
+    public boolean aggiungiAmico(String nick, String friend) throws UserNotExists {
         if (users.get(friend) == null) throw new UserNotExists();
 
         synchronized (users) {
+            if(hasFriend(nick, friend)) return false;
             //aggiorno la lista di nick
             users.computeIfPresent(nick, (key, oldU) -> {
                 oldU.removePending(friend);
@@ -103,20 +95,45 @@ public class Users implements Serializable, IUsers {
                 return oldU;
             });
         }
+        return true;
     }
 
-    public JSONArray listaAmici(String nick) {
-        List<String> friends=users.get(nick).getFriends();
+    public boolean hasFriend(String nick, String friend) {
+        return users.get(nick).hasFriend(friend);
+    }
+
+    /**
+     * Restituisce la lista degli amici
+     * @param nick utente da cui si vuole ottenere la lista amici
+     * @return JSONARRAY con la lista degli amici
+     */
+    public JSONArray listaAmici(String nick) throws UserNotExists {
         JSONArray array=new JSONArray();
-        array.addAll(friends);
+        array.addAll(getFriends(nick));
         return array;
     }
 
+    public List<String> getFriends(String nick) throws UserNotExists{
+        try {
+            return users.get(nick).getFriends();
+        }catch (NullPointerException e){
+            throw new UserNotExists();
+        }
+    }
+
+    /**
+     * Restituisce la lista delle richieste di amicizia
+     * @param nick utente da cui si vuole ottenere la lista delle richieste
+     * @return lista delle richieste
+     */
     public JSONArray listaRichieste(String nick) {
-        List<String> pendings=users.get(nick).getPendings();
         JSONArray array=new JSONArray();
-        array.addAll(pendings);
+        array.addAll(getPendings(nick));
         return array;
+    }
+
+    public List<String> getPendings(String nick) {
+        return users.get(nick).getPendings();
     }
 
     public boolean addPending(String nick, String friend) throws FriendshipException {
@@ -127,26 +144,37 @@ public class Users implements Serializable, IUsers {
         users.get(nick).removePending(friend);
     }
 
+    public boolean containsPending(String nick, String friend) {
+        return users.get(nick).getPendings().contains(friend);
+    }
+
     /*                      CLASSIFICA                      */
 
-    public JSONArray mostraClassifica(String nick){
+    public List<IUser> getLeaderboard(String nick){
         List<String> amici=users.get(nick).getFriends();
-        JSONArray array=new JSONArray();
-
-        List<User> ut = new ArrayList<User>();
+        List<IUser> ut = new ArrayList<>();
         ut.add(users.get(nick));
         for (String s : amici) {
             ut.add(users.get(s));
         }
-        ut.sort(Comparator.comparingInt(User::getScore).reversed());
+        ut.sort(Comparator.comparingInt(IUser::getScore).reversed());
+        return ut;
+    }
 
-        for (User u:ut) {
+    /**
+     * Restituisce la classifica per l'utente
+     * @param nick utente
+     * @return JSONArray contenente la classifica
+     */
+    public JSONArray mostraClassifica(String nick){
+        List<IUser> ut = getLeaderboard(nick);
+        JSONArray array=new JSONArray();
+        for (IUser u:ut) {
             JSONObject user=new JSONObject();
             user.put("nick", u.getNickname());
             user.put("score", u.getScore());
             array.add(user);
         }
-        //System.out.println("array:"+array.toJSONString());
         return array;
 
     }
@@ -157,9 +185,17 @@ public class Users implements Serializable, IUsers {
 
     /*                      CHALLENGE                       */
 
-    public Challenge sfida(String nick, String friend) throws UserAlreadyInGame, UserNotOnline, ChallengeException {
-        //todo se uno si disconnette quello che rimane continua da solo
-        //TODO genera pacchetto udp e inoltra la richiesta (utilizzare future?)
+    /**
+     * Crea la sfida tra i due users e rimuove la richiesta di sfida
+     * @param nick utente che accetta la sfida
+     * @param friend utente che aveva richiesto la sfida
+     * @return la sfida appena creata
+     * @throws UserNotOnline        se almeno uno dei due non è online
+     * @throws UserAlreadyInGame    se almeno uno dei due è in gioco
+     * @throws ChallengeException   se non esiste la richiesta di sfida fatta da friend a nick
+     * @throws UserNotExists        se almeno uno dei due non esiste
+     */
+    public IChallenge sfida(String nick, String friend) throws UserAlreadyInGame, UserNotOnline, ChallengeException, UserNotExists {
        Challenge c;
        synchronized (users) {
            if (isLogged(nick) && isLogged(friend)) {
@@ -167,7 +203,7 @@ public class Users implements Serializable, IUsers {
                    if(hasChallengeRequest(nick, friend)) {
                         users.get(nick).removeChallengeRequest(friend);
                        //la sfida era stata richiesta da friend
-                       c = new Challenge(users.get(nick), users.get(friend),  getParole());
+                       c = new Challenge(users.get(nick), users.get(friend));
                        users.get(nick).setChallenge(c);
                        users.get(friend).setChallenge(c);
                    }
@@ -181,51 +217,72 @@ public class Users implements Serializable, IUsers {
 
     }
 
+    /**
+     * Controlla se l'utente nick ha una richiesta di sfida da friend
+     * @param nick utente sul quale effettuare il controllo
+     * @param friend utente che dovrebbe aver mandato la richiesta
+     * @return true se esiste, false altrimenti
+     */
     public boolean hasChallengeRequest(String nick, String friend) {
         return users.get(nick).hasChallengeRequest(friend);
     }
 
+    /**
+     * Restituisce l'oggetto sfida associato a nick
+     * @param nick utente
+     * @return sfida
+     */
     public Challenge getChallenge(String nick){
         return users.get(nick).getChallenge();
     }
 
-    public boolean isInChallenge(String nick){
-        Challenge c=users.get(nick).getChallenge();
-        if(c==null) return false;
-        synchronized (c) {
-            return c.isActive();
+    /**
+     * Controlla se l'utente ha una sfida attiva
+     * @param nick utente
+     * @return true se ha una sfida attiva, false altrimenti
+     * @throws UserNotExists se l'utente nick non esiste
+     */
+    public boolean isInChallenge(String nick) throws UserNotExists{
+        User u=users.get(nick);
+        if(u==null) throw new UserNotExists();
+        synchronized (u) {
+            return u.isInChallenge();
         }
     }
 
-    public int aggiornaPunteggio(String nick, int punteggio)throws UserNotExists {
+    /**
+     * Aggiunge la richiesta di sfida fatta da nick
+     * a friend alle richieste di sfida ricevute di friend
+     * @param nick from
+     * @param friend to
+     * @return true se non era presente già
+     */
+    public boolean addPendingChallenge(String nick, String friend) throws UserNotExists {
         try {
-            return Objects.requireNonNull(users.computeIfPresent(nick, (key, oldU) -> {
-                oldU.addScore(punteggio);
-                return oldU;
-            })).getScore();
+            synchronized(users){
+                return users.get(friend).addChallengeRequest(nick);
+            }
+
         }catch (NullPointerException e){
             throw new UserNotExists();
         }
     }
 
-
-
-
-    /*public User getUtente(String nick){
-        return users.get(nick);
-    }*/
-
-
-    public boolean isLogged(String nick){
-        return users.get(nick).isLogged();
-    }
-
-    public boolean exists(String nick) {
-        return users.get(nick)!=null;
-    }
-
-    public Iterator<User> getIterator() {
-        return users.values().iterator();
+    /**
+     * Rimuove la richiesta di sfida fatta da nick a friend
+     * @param nick from
+     * @param friend to
+     * @return true se era presente ed è stato rimosso, false altrimenti
+     * @throws UserNotExists se l'utente non esiste
+     */
+    public  boolean  removePendingChallenge(String nick, String friend) throws UserNotExists {
+        try {
+            synchronized(users){
+                return users.get(friend).removeChallengeRequest(nick);
+            }
+        }catch (NullPointerException e){
+            throw new UserNotExists();
+        }
     }
 
     /*                      TOKEN                       */
@@ -233,7 +290,7 @@ public class Users implements Serializable, IUsers {
     /**
      * Restituisce il token associato all'utente
      * @param nick
-     * @return
+     * @return token
      * @throws UserNotExists se l'utente non esiste
      */
     public String getToken(String nick)throws UserNotExists{
@@ -248,7 +305,7 @@ public class Users implements Serializable, IUsers {
      * Genera il token per l'utente
      * @param nick
      * @param pw
-     * @return token
+     * @return token generato
      */
     private String generateToken(String nick, String pw){
         String token="";
@@ -277,83 +334,8 @@ public class Users implements Serializable, IUsers {
      * @throws UserNotExists se l'utente non esiste
      */
     public boolean validateToken(String nick, String token) throws UserNotExists{
-
             return getToken(nick).equals(token);
-
     }
 
-    public boolean containsPending(String nick, String friend) {
-        return users.get(nick).getPendings().contains(friend);
-    }
 
-    //todo termina sfida
-
-    /**
-     * Termina la sfida e aggiorna i punteggi
-     * @param c
-     * @return true se la termina flase altrimenti
-     * @throws UserNotExists
-     */
-    public boolean terminaSfida(Challenge c) throws UserNotExists {
-        synchronized (c) {
-
-            if(c.endChallenge()){
-
-                List<String> users=c.getUsers();
-                aggiornaPunteggio(users.get(0), c.getScore(users.get(0)));
-                aggiornaPunteggio(users.get(1), c.getScore(users.get(1)));
-                return true;
-            }
-
-        }
-        return false;
-    }
-
-    /**
-     * Aggiunge la richiesta di sfida fatta da nick
-     * a friend alle richieste di sfida ricevute di friend
-     * @param nick from
-     * @param friend to
-     * @returns true se non era presente già
-     */
-    public boolean addPendingChallenge(String nick, String friend) throws UserNotExists {
-
-        try {
-            synchronized(users){
-                return users.get(friend).addChallengeRequest(nick);
-            }
-
-
-        }catch (NullPointerException e){
-
-            throw new UserNotExists();
-
-        }
-
-    }
-
-    /**
-     *
-     * @param nick from
-     * @param friend to
-     * @return true se è stato rimosso
-     */
-    public  boolean  removePendingChallenge(String nick, String friend) throws UserNotExists {
-        try {
-            synchronized(users){
-                return users.get(friend).removeChallengeRequest(nick);
-            }
-        }catch (NullPointerException e){
-            throw new UserNotExists();
-
-        }
-    }
-
-    public boolean hasFriend(String nick, String friend) {
-        return users.get(nick).hasFriend(friend);
-    }
-
-    public List<String> getListaAmici(String nick) {
-        return users.get(nick).getFriends();
-    }
 }

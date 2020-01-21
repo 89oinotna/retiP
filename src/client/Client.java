@@ -1,38 +1,24 @@
 package client;
 
-import Settings.Settings;
-import exceptions.WrongCredException;
 
-import javax.swing.*;
-import java.io.File;
-import java.time.LocalDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Client {
-    private ClientRMI rmi;
-    private ClientTCP tcp;
-    private ClientUDP udp;
+    private final ClientRMI rmi;
+    private final ClientTCP tcp;
+    private final ClientUDP udp;
     private Thread tcpTH;
     private Thread udpTH;
-    private String token;
     private boolean logged;
-    private String loggedNick;
     private ClientLoggedGUI cloggedGUI;
-    //private Thread tFriend;
-    //private int pendingSize;
-    //todo togliere dal server il pendingsize
     private List<String> pendingFriendsList; //lista delle richieste di amicizia ricevute
     private List<String> friendsList; //lista degli amici
     private final List<String> classificaList; //classifica
     private ClientLoginGUI cloginGUI;
-    private ConcurrentHashMap<String, LocalDateTime> richiesteSfida;
+    private ConcurrentHashMap<String, String> richiesteSfida;
     private List<String> sfida;
 
     public Client(){
@@ -43,189 +29,196 @@ public class Client {
         logged=false;
         sfida=Collections.synchronizedList(new LinkedList<>());
         rmi = new ClientRMI(8082);
-        tcp=new ClientTCP(sfida, pendingFriendsList, friendsList, classificaList, richiesteSfida);
-        udp=new ClientUDP(richiesteSfida);
-        //todo last response?? cosi posso fare show di NOK
+        tcp = new ClientTCP(sfida, pendingFriendsList, friendsList, classificaList, richiesteSfida);
+        udp = new ClientUDP(richiesteSfida);
 
 
     }
-
-
-
-
 
     public static void main(String[] args){
-/**      /"\
-        |\./|
-        |   |
-        |>*<|
-        |   |
-     /'\|   |/'\
- /'\|   |   |   |
-|   |   |   |   |\
-|   |   |   |   |  \
-| *   *   *   * |>  >
-|                  /
- |               /
-  |            /
-   \          |
-    |         |
- */
-        Client c=new Client();
-        c.cloginGUI=new ClientLoginGUI(c);
-        //TODO LISTENER PER OGGETTO RICHIESTE aMICIZIA
-        Thread amiciziaTH=new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while(!Thread.currentThread().isInterrupted()){
-                    synchronized (c.friendsList){
-                        //todo aggiungere flag online?
-                        try {
-                            c.friendsList.wait();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        c.cloggedGUI.clearFriend();
-                        for (String s:c.friendsList) {
-                            c.cloggedGUI.addFriendTile(s);
+        /**      /"\
+                |\./|
+                |   |
+                |>*<|
+                |   |
+             /'\|   |/'\
+         /'\|   |   |   |
+        |   |   |   |   |\
+        |   |   |   |   |  \
+        | *   *   *   * |>  >
+        |                  /
+         |               /
+          |            /
+           \          |
+            |         |
+         */
 
-                        }
-                        c.cloggedGUI.updateUI();
-                    }
-                }
-            }
-        });
-        //TODO LISTENER OGGETTO AMICIZIA ACCETTATA
-        Thread pendingTH=new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while(!Thread.currentThread().isInterrupted()){
-                    synchronized (c.pendingFriendsList){
-                        try {
-                            c.pendingFriendsList.wait();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        c.cloggedGUI.clearPending();
-                        for (String s:c.pendingFriendsList) {
-                            c.cloggedGUI.addPendingFriendTile(s);
-                        }
-
-                        c.cloggedGUI.updateUI();
-
-                    }
-                }
-            }
-        });
-        Thread classificaTH=new Thread(new Runnable() {
-            @Override
-            public void run() {
-                int size=0;
-                while(!Thread.currentThread().isInterrupted()){
-                    synchronized (c.classificaList){
-                        try {
-                            c.classificaList.wait();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
-                        c.cloggedGUI.clearClassifica();
-                        c.cloggedGUI.updateClassifica(c.classificaList);
-                        c.cloggedGUI.updateUI();
-
-
-                    }
-                }
-            }
-        });
-        Thread richiesteSfidaTH=new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while(!Thread.currentThread().isInterrupted()){
-                    synchronized (c.richiesteSfida){
-                        try {
-
-                            c.richiesteSfida.wait();
-                            c.cloggedGUI.clearRichiesteSfida();
-                            for (String nick:c.richiesteSfida.keySet()) {
-                                c.cloggedGUI.addSfidaTile(nick);
+        while(true) {
+            Client c = new Client();
+            c.cloginGUI = new ClientLoginGUI( c.rmi, c.tcp, c.udp);
+            Thread amiciziaTH = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        synchronized (c.friendsList) {
+                            //todo aggiungere flag online?
+                            try {
+                                c.friendsList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            c.cloggedGUI.clearFriend();
+                            for (String s : c.friendsList) {
+                                c.cloggedGUI.addFriendTile(s);
 
                             }
                             c.cloggedGUI.updateUI();
-
-
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
                         }
-
                     }
                 }
-            }
-        });
-        Thread sfidaTH=new Thread(new Runnable() {
-            @Override
-            public void run() {
-                while(!Thread.currentThread().isInterrupted()){
-                    synchronized (c.sfida){
-                        try {
-
-                            c.sfida.wait();
-                            if(c.sfida.isEmpty()){
-
+            });
+            Thread pendingTH = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        synchronized (c.pendingFriendsList) {
+                            try {
+                                c.pendingFriendsList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
                             }
-                            else if(c.sfida.size()<3) {
-                                c.cloggedGUI.initSfida(c.sfida.get(0), c.sfida.get(1));
+                            c.cloggedGUI.clearPending();
+                            for (String s : c.pendingFriendsList) {
+                                c.cloggedGUI.addPendingFriendTile(s);
                             }
-                            else
-                            {
 
-                                c.cloggedGUI.endSfida(c.sfida.get(2));
-                                c.sfida.clear();
-                            }
                             c.cloggedGUI.updateUI();
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
-                        }
 
+                        }
+                    }
+                }
+            });
+            Thread classificaTH = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    int size = 0;
+                    while (!Thread.currentThread().isInterrupted()) {
+                        synchronized (c.classificaList) {
+                            try {
+                                c.classificaList.wait();
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+                            c.cloggedGUI.clearClassifica();
+                            c.cloggedGUI.updateClassifica(c.classificaList);
+                            c.cloggedGUI.updateUI();
+
+
+                        }
+                    }
+                }
+            });
+            Thread richiesteSfidaTH = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    while (!Thread.currentThread().isInterrupted()) {
+                        synchronized (c.richiesteSfida) {
+                            try {
+
+                                c.richiesteSfida.wait();
+                                c.cloggedGUI.clearRichiesteSfida();
+                                for (String nick : c.richiesteSfida.keySet()) {
+                                    c.cloggedGUI.addSfidaTile(nick);
+
+                                }
+                                c.cloggedGUI.updateUI();
+
+
+                            } catch (InterruptedException e) {
+                                e.printStackTrace();
+                            }
+
+                        }
+                    }
+                }
+            });
+            Thread sfidaTH = new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                    while (true) {
+                        synchronized (c.sfida) {
+
+                                while(c.sfida.isEmpty()) {
+                                    c.sfida.wait();
+                                }
+                                if (c.sfida.size()==1) {
+                                    try {
+                                        int s=Integer.parseInt(c.sfida.get(0));
+                                        c.cloggedGUI.endSfida(s);
+                                    }
+                                    catch (NumberFormatException e) {
+                                        c.cloggedGUI.preparaSfida(c.sfida.get(0));
+                                    }
+                                    c.sfida.clear();
+                                }
+                                else if (c.sfida.size() == 2) {
+                                    c.cloggedGUI.initSfida(c.sfida.get(0), c.sfida.get(1));
+                                    c.sfida.clear();
+                                }
+                                c.cloggedGUI.updateUI();
+
+
+                        }
+                    }
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+            });
+            amiciziaTH.start();
+            pendingTH.start();
+            classificaTH.start();
+            richiesteSfidaTH.start();
+            sfidaTH.start();
+            synchronized (c.tcp) {
+                while (!c.tcp.isLogged()) {
+                    try {
+                        c.tcp.wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
                     }
                 }
             }
-        });
-        amiciziaTH.start();
-        pendingTH.start();
-        classificaTH.start();
-        richiesteSfidaTH.start();
-        sfidaTH.start();
-        synchronized (c){
-            while(!c.isLogged()){
-                try {
-                    c.wait();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
+            c.cloginGUI.close();
+            c.cloggedGUI = new ClientLoggedGUI(c.tcp, c.tcp.getLoggedNick());
+            Thread tcpTH = new Thread(c.tcp);
+            tcpTH.start();
+            Thread udpTH = new Thread(c.udp);
+            udpTH.start();
+            synchronized (c.tcp) {
+                while (c.tcp.isLogged()) {
+                    try {
+                        c.tcp.wait();
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 }
             }
-        }
-        c.cloginGUI.close();
-        c.udp.setLoggedInfo(c.loggedNick, c.token);
-        c.cloggedGUI=new ClientLoggedGUI(c.tcp, c.udp, c.loggedNick);
-        Thread tcpTH=new Thread(c.tcp);
-        tcpTH.start();
-        Thread udpTH=new Thread(c.udp);
-        udpTH.start();
-
-
-        synchronized (c){
-            while(!c.isLogged()){
-                try {
-                    c.wait();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
+            amiciziaTH.interrupt();
+            pendingTH.interrupt();
+            classificaTH.interrupt();
+            richiesteSfidaTH.interrupt();
+            sfidaTH.interrupt();
+            tcpTH.interrupt();
+            udpTH.interrupt();
+            c.cloggedGUI.close();
         }
     }
 
 
-    public String registraUtente(String nick, String pw) {
+    /*public String registraUtente(String nick, String pw) throws IOException, WrongCredException {
 
         String response=rmi.registraUtente(nick, pw);
         System.out.print(response);
@@ -242,13 +235,13 @@ public class Client {
         }
         return response;
 
-    }
+    }*/
 
-    private boolean isLogged() {
+    /*private boolean isLogged() {
         return logged;
-    }
+    }*/
 
-    public String loginUtente(String nick, String pw) {
+    /*public String loginUtente(String nick, String pw) throws IOException {
             System.out.println(pw);
             String response=tcp.login(nick, pw, udp.getUdpPort());
             String[] tokens=response.split(" ");
@@ -266,11 +259,11 @@ public class Client {
             }
             return response;
 
-    }
+    }*/
 
 
 
-    public synchronized void setLogged(String token, String nick){
+    /*public synchronized void setLogged(String token, String nick){
         tcp.setToken(token);
         tcp.setLoggedNick(nick);
         logged=true;
@@ -279,7 +272,14 @@ public class Client {
             this.notify();
         }
 
-    }
+    }*/
+
+    /*public void logout(){
+        synchronized (this){
+            this.logged=false;
+            this.notify();
+        }
+    }*/
 
 
 }

@@ -5,8 +5,10 @@ import exceptions.UserNotExists;
 
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
-import java.util.TimerTask;
 
+/**
+ * Si occupa di notificare la scadenza del timer della richiesta di sfida
+ */
 public class TimerChallengeRequest extends TimerChallenge {
     private Users users;
     private SelectionKey k1;

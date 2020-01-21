@@ -5,29 +5,26 @@ import exceptions.*;
 import Settings.Settings;
 
 import java.io.IOException;
-import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-//todo wait for reply (cosi non si accodano le risposte)
+/**
+ * Worker che si occupa della gestione di tutti i comandi TCP
+ */
 public class WorkerTCP implements Runnable {
 
     private SelectionKey k;
-    private int BUFFLEN=1024;
-    private Selector selector;
-    private Users users;
+    private final Users users;
     private UDP udp;
     private final ConcurrentHashMap<SelectionKey, SelectionKey> usingK;
-    //private ConcurrentHashMap<String, SelectionKey> keys;
     private ConcurrentHashMap<String, SelectionKey> keys; //contiene Selection Key e UDP port
     private String token;
-    public WorkerTCP(Selector s, SelectionKey k, Users users,
+    public WorkerTCP(SelectionKey k, Users users,
                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK,
                      ConcurrentHashMap<String, SelectionKey> keys, UDP udp) {
-        selector=s;
+
         this.udp=udp;
         this.k=k;
         this.usingK = usingK;
@@ -38,40 +35,33 @@ public class WorkerTCP implements Runnable {
 
     public void run() {
         try {
-            if (k.isAcceptable()) { //se è il channel sul quale accetto le connessioni
-                accept(k);
-            } else if (k.isReadable()) {
-                String command = read(k);
-                if(command.length()>0) {
-                    System.out.println("REQUEST: " + command);
-                    String response = null;
-                    try {
-                        response = manageCommand(command, k);
+            String command = read();
+            if(command.length()>0) {
+                System.out.println("REQUEST: " + command);
+                String response = null;
+                try {
+                    response = manageCommand(command);
 
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                        response = Settings.RESPONSE.NOK +" " + e.toString().split(":")[0]+ " "+token;
-                    } finally {
-                        if (response != null) {
-                            System.out.println("Response: " + response);
-                            send(k, response + "\n");
-                        }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    response = Settings.RESPONSE.NOK +" " + e.toString().split(":")[0]+ " "+((MyAttachment)k.attachment()).getToken();
+                } finally {
+                    if (response != null) {
+                        System.out.println("Response: " + response);
+                        send(response + "\n");
                     }
                 }
             }
+
         } catch (IOException e) {
             e.printStackTrace();
-            System.out.println("Disconnected");
-            //todo cancellare sfide attive, logout, cancellare token
-            /*String nick=keys.keySet()
-                            .stream()
-                            .filter(key -> k.equals(keys.get(key).getFirst()))
-                            .findFirst().get();*/
+            System.out.println("Disconnected "+((MyAttachment)k.attachment()).getNick());
             k.cancel();
-            logout(((MyAttachment)k.attachment()).getNick());
+            users.logout(((MyAttachment)k.attachment()).getNick());
 
         }
         finally {
+            k.interestOps(SelectionKey.OP_READ);
             synchronized (usingK) {
                 usingK.remove(k);
             }
@@ -79,250 +69,328 @@ public class WorkerTCP implements Runnable {
 
     }
 
-    public String manageCommand(String cmd, SelectionKey k) throws FriendshipException, UserNotExists, WrongCredException, UserAlreadyLogged, UserNotOnline, UserAlreadyInGame, ChallengeException {
-        //todo mandare la porta udp al login
+    /**
+     * Funzione principale che effettua il parse del comando
+     *  e invoca la funzione per gestirlo
+     * @param cmd comando ricevuto
+     * @return risposta per il comando ricevuto
+     */
+    public String manageCommand(String cmd) throws FriendshipException, UserNotExists, WrongCredException, UserAlreadyLogged, UserNotOnline, UserAlreadyInGame, ChallengeException {
         String[] tokens=cmd.split(" ");
-        token=tokens[2];
+        //token=tokens[2];
         Settings.REQUEST r = Settings.REQUEST.valueOf(tokens[0]);
-        switch(r){
-            case LOGIN:
-                return Settings.RESPONSE.OK+" "+login(tokens, k);
-            case SFIDA:
-                //todo update della classifica per tutti i client amici
-                return sfida(tokens);
-            case AMICIZIA:
-                return Settings.RESPONSE.OK+" "+amicizia(tokens);
-            case GET:
-                return get(tokens);
-            case PAROLA:
-                return Settings.RESPONSE.OK+" "+word(tokens);
-
-            /*case "PAROLA":
-                //parola nick token parola
-                //return parola();
-                break;*/
-        }
-
-        return null;
+        if(r.equals(Settings.REQUEST.LOGIN)) return Settings.RESPONSE.OK + " " + login(tokens[1], tokens[2], tokens[3]);
+        else if(((MyAttachment)k.attachment()).getToken().equals(tokens[2])) {
+            token=tokens[2];
+            switch (r) {
+                case LOGOUT:
+                    logout(tokens[1]);
+                    return null;
+                case SFIDA:
+                    return sfida(tokens[1], tokens[3], tokens[4]);
+                case AMICIZIA:
+                    return Settings.RESPONSE.OK + " " + amicizia(tokens[1], tokens[3], tokens[4]);
+                case GET:
+                    return get(tokens[1], tokens[3]);
+                case PAROLA:
+                    return Settings.RESPONSE.OK + " " + parola(tokens[1], tokens[3]);
+            }
+            throw new IllegalArgumentException();
+        }else throw new WrongCredException();
     }
 
     /**
-     * Gestisce l'ivio di una parola della sfida
-     * @return
+     * Gestisce il comando di login
+     * @param nick nickname utente che effettua il login
+     * @param pw password utente
+     * @param p porta udp dell'utente su cui inoltrare le richieste di sfida
+     * @return stringa per la risposta conntenente le informazioni di login (amici, richieste, classifica)
+     * @throws WrongCredException se i dati di login non sono corretti
+     * @throws UserNotExists se l'utente non esiste
+     * @throws UserAlreadyLogged se l'utente è già loggato
      */
-    private String word(String[] tokens) throws UserNotExists, ChallengeException {
-        if(users.validateToken(tokens[1], tokens[2])){
-            Challenge c=users.getChallenge(tokens[1]);
-            if(c==null) throw new ChallengeException();
-            synchronized (c) {
-                String nextWord = c.tryWord(tokens[1], tokens[3]);
-                if (nextWord != null) {
-                    return Settings.RESPONSE.PAROLA + " " + tokens[2] + " " + nextWord;
-                } else { //sfida terminata
-                    //todo inoltrare all'avversario
-                    users.terminaSfida(c);
-                    String friend = c.getOpponent(tokens[1]);
-                    aggiornaClassificheAmici(tokens[1], friend);
-                    inoltraTermineSfida(tokens[1], friend, Settings.SFIDA.TERMINATA, c.getScore(friend));
+    public String login(String nick, String pw, String p)throws WrongCredException, UserNotExists, UserAlreadyLogged{
+        //todo possibilità di riconnessione alla sfida dopo disconnessione
+        String token=users.login(nick, pw);
+        Integer port=Integer.valueOf(p);    //la porta UDP viene passata come parametro al comando di login
+        keys.put(nick, k);
+        ((MyAttachment)k.attachment()).setNick(nick).setUDPPort(port).setToken(token);  //setto tutte le informazioni nell'attachment
+        return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
+                Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(nick).toJSONString()+" \n"+
+                Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(nick).toJSONString()+" \n" +
+                Settings.RESPONSE.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(nick).toJSONString();
 
-                    return Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.TERMINATA + " " + c.getScore(tokens[1]);
-                }
-            }
-        }
-        throw new WrongCredException();
     }
 
-    private void aggiornaClassificheAmici(String nick, String friend) throws UserNotExists {
+    /**
+     * Gestisce il comando di logout
+     * @param nick request string tokenizzata
+     */
+    public void logout(String nick) {
+            users.logout(nick);
+            k.cancel();
+    }
+
+    /*                      SFIDA                       */
+
+    /**
+     * Crea la sfida tra i due users inoltrando la richiesta udp all'altro
+     * @param nick utente che invia il comando
+     * @param friend amico
+     * @param type tipo di richiesta sulla sfida
+     * @return risposta per il comando di sfida
+     * @throws UserNotOnline se uno dei due non è online
+     * @throws UserNotExists se uno dei due non esiste
+     * @throws UserAlreadyInGame se uno dei due ha una sfida attiva
+     * @throws ChallengeException se richiedo la sfida a qualcuno a cui l'ho già chiesta,
+     *                            se richiedo la sfida a qualcuno che me l'ha già richiesta
+     *                            oppure voglio accettare la sfida ma non esiste la richiesta
+     */
+    public String sfida(String nick, String friend, String type) throws UserNotOnline, UserNotExists, UserAlreadyInGame, ChallengeException {
+            switch (Settings.RQTType.valueOf(type)) {
+                case RICHIEDI:
+                    return richiediSfida(nick, friend);
+                case ACCETTA:
+                    return accettaSfida(nick, friend);
+                case RIFIUTA:
+                    return rifiutaSfida(nick, friend);
+            }
+            throw  new IllegalArgumentException();
+    }
+
+    /**
+     * Richiede la sfida a friend inoltrandola su UDP creando un timer per gestire il timeout della richiesta
+     * @param nick from
+     * @param friend to
+     * @return stringa che mi dice che la richiesta è stata richiesta
+     * @throws UserNotOnline se friend non è online
+     * @throws UserNotExists se uno dei due non esiste
+     * @throws ChallengeException se richiedo la sfida a qualcuno a cui l'ho già chiesta,
+     *                            se richiedo la sfida a qualcuno che me l'ha già richiesta
+     */
+    public String richiediSfida(String nick, String friend) throws UserNotOnline, UserNotExists, ChallengeException {
+        try {
+            if (!users.isInChallenge(nick) && !users.isInChallenge(friend)
+                    && !users.hasChallengeRequest(nick, friend)
+                    && users.addPendingChallenge(nick, friend)) {
+
+                if (inoltraRichiestaSfida(nick, friend)) {
+                    //avvio il timer per il timeout della richiesta
+                    Timer t = new Timer();
+                    TimerTask tt = new TimerChallengeRequest(nick, friend, keys.get(nick), keys.get(friend), users);
+                    t.schedule(tt, Settings.TIMEOUT);
+                    return Settings.RESPONSE.OK + " " + Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.RICHIESTA;
+                } else {   //se non la inoltra cancello la richiesta
+                    users.removePendingChallenge(nick, friend);
+                    throw new UserNotOnline();
+                }
+            }
+            else //portei accettarla quando richiedo la sfida a qualcuno che me l'ha già chiesta
+                throw new ChallengeException();
+
+        } catch (UserNotExists | UserNotOnline | ChallengeException e){ //cancello la richiesta
+            users.removePendingChallenge(nick, friend);
+            throw e;
+        }
+    }
+
+    /**
+     * Accetta la sfida e la crea per i due utenti inoltrando l'accettazione a chi l'aveva richiesta
+     * @param nick utente che accetta la sfida
+     * @param friend utente che aveva inviato la richiesta di sfida
+     * @return stringa di sfida accettata
+     * @throws ChallengeException se non esiste la richiesta di sfida da friend a nick
+     * @throws UserNotOnline se almeno uno dei due utenti non è online
+     * @throws UserNotExists se non esiste
+     * @throws UserAlreadyInGame se almeno uno è in gioco
+     */
+    public  String accettaSfida(String nick, String friend) throws ChallengeException, UserNotOnline, UserNotExists, UserAlreadyInGame {
+        Challenge c = (Challenge)users.sfida(nick, friend);
+        c.setKeys(k, keys.get(friend));
+        //Avvio il thread che si occupa della traduzione delle parole
+        Thread cTH=new Thread(c);
+        cTH.start();
+        //schedulo il timer di chiusura sfida
+        Timer t = new Timer();
+        TimerTask tt = new TimerChallengeEnd(keys.get(nick), keys.get(friend), c, users, keys);
+        t.schedule(tt, Settings.timer);
+        try{
+            inoltraSfida(nick, friend, Settings.SFIDA.ACCETTATA);
+
+        }catch (UserNotOnline e){ //se non riesco a inoltrare termino la sfida
+            c.endChallenge();
+            throw e;
+        }
+        return Settings.RESPONSE.OK+" "+Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.ACCETTATA;
+
+    }
+
+    /**
+     * Rifiuta una richiesta di sfida rimuovendola dalle richieste
+     * @param nick utente che rifiuta
+     * @param friend utente che aveva richiesto la sfida
+     * @return stringa di sfida rifiutata
+     * @throws UserNotExists se non esiste
+     */
+    public String rifiutaSfida(String nick, String friend) throws UserNotExists {
+        //from friend to me
+        users.removePendingChallenge(friend, nick);
+        //possibile implementazione per notificare il rifiuto
+        /*try{
+            inoltraSfida(nick, friend, Settings.SFIDA.RIFIUTATA);
+        }catch (UserNotOnline ignored){
+            //significa che non è online (ignoro)
+        }*/
+        return Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.RIFIUTATA;
+
+    }
+
+    /**
+     * Inoltra la sfida su udp a friend
+     * @throws UserNotExists se l'utente non esiste
+     * @throws UserNotOnline se l'utente non è online
+     * @return true se la inoltra, false se non riesce
+     */
+    public boolean inoltraRichiestaSfida(String nick, String friend) throws UserNotExists, UserNotOnline {
+        if(!users.isLogged(friend)) throw new UserNotOnline();
+        try {
+            udp.write(nick, friend, users.getToken(friend), ((MyAttachment) keys.get(friend).attachment()).getUDPPort());
+            return true;
+        }catch (IOException e){
+            return false;
+        }
+    }
+
+    /**
+     * Inoltra informazioni sulla sfida a friend
+     * @param nick che effettua l'inoltro
+     * @param friend che riceve l'inoltro
+     * @param type  tipo di inoltro da effettuare per la sfida
+     * @param punteggio punteggio da inoltrare per sfida terminata
+     * @throws UserNotExists se l'utente a cui inoltrare non esiste
+     * @throws UserNotOnline se l'utente a cui inoltrare non è online
+     */
+    public void inoltraSfida(String nick, String friend, Settings.SFIDA type, int... punteggio) throws UserNotExists, UserNotOnline {
+        String request;
+        if(type.equals(Settings.SFIDA.TERMINATA))
+            request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type+" "+punteggio[0];
+        else{
+            request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type;
+        }
+        SelectionKey k= keys.get(friend);
+        if(k==null) return ; //se non è registrata la key non la inoltro (non è online)
+        try {
+            send(k, request + "\n");
+        }catch (IOException e){
+            throw new UserNotOnline();
+        }
+
+    }
+
+    /**
+     * Aggiorna le classifiche degli amici comporeso la propria
+     * @param nick utente della sfida
+     * @param friend utente della sfida
+     * @throws UserNotExists se non esiste uno dei due utenti
+     */
+    private void aggiornaClassifiche(String nick, String friend) throws UserNotExists {
         List<String> friends=new ArrayList<>();
-        friends.addAll(users.getListaAmici(nick));
-        friends.addAll(users.getListaAmici(friend));
+        friends.addAll(users.getFriends(nick));
+        friends.addAll(users.getFriends(friend));
         for (String f:friends) {
             String response=Settings.GetType.CLASSIFICA+" "+ users.getToken(f)+" "+ users.mostraClassifica(f).toJSONString();
             SelectionKey k= keys.get(f);
             if(k==null) continue ;
             try {
                 send(k, response + "\n");
-            }catch (IOException e){
+            }catch (IOException ignore){
 
             }
         }
 
     }
 
-    public void inoltraTermineSfida(String nick, String friend, Settings.SFIDA type, int punteggio) throws UserNotExists {
-        String request=Settings.RESPONSE.SFIDA+" "+ users.getToken(friend)+" "+nick+" "+type+" "+punteggio;
-        SelectionKey k= keys.get(friend);
-        if(k==null) return ; //se non è registrata la key non la inoltro (non è online)
-        //try {
-            /*synchronized (usingK) {
-                while (usingK.putIfAbsent(k, k) != null) {
-                    usingK.wait();
+    /*                      PAROLA                      */
+
+    /**
+     * Gestisce l'ivio di una parola della sfida
+     * @param nick utente che invia la parola
+     * @param parola parola inviata
+     * @return risposta con la prossima parola se la sfida non è terminata oppure
+     *         risposta di fine sfida con punteggio se la sfida è terminata
+     * @throws UserNotExists se l'utente non esiste
+     * @throws ChallengeException se l'utente non ha una sfida
+     */
+    private String parola(String nick, String parola) throws UserNotExists, ChallengeException {
+        Challenge c=users.getChallenge(nick);
+        if(c==null) throw new ChallengeException();
+        synchronized (c) {
+            String nextWord = c.tryWord(nick, parola);
+            if (nextWord != null) {
+                return Settings.RESPONSE.PAROLA + " " + token + " " + nextWord;
+            } else { //sfida terminata
+                c.endChallenge();
+                String friend = c.getOpponent(nick);
+                aggiornaClassifiche(nick, friend);
+                try {
+                    inoltraSfida(nick, friend, Settings.SFIDA.TERMINATA, c.getScore(friend));
+                } catch (UserNotOnline ignore) {
+                    //ignoro
                 }
-            }*/
-
-            try {
-                send(k, request + "\n");
-            }catch (IOException e){
-
+                return Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.TERMINATA + " " + c.getScore(nick);
             }
-
-            /*synchronized (usingK) {
-                usingK.remove(k);
-                usingK.notify();
-            }*/
-
-        /*} catch (InterruptedException e) {
-            e.printStackTrace();
-
-        }*/
-    }
-
-    /**
-     * Gestisce la richiesta di login
-     * @param k selectionkey associata
-     * @param tokens request string tokenizzata
-     * @return
-     */
-    public String login(String[] tokens, SelectionKey k)throws WrongCredException, UserNotExists, UserAlreadyLogged{
-        String token=users.login(tokens[1], tokens[2]);
-        Integer port=Integer.valueOf(tokens[3]);
-        keys.put(tokens[1], k);
-        ((MyAttachment)k.attachment()).setNick(tokens[1]).setUDPPort(port);
-        return  Settings.RESPONSE.LOGIN+" "+token+" \n"+
-                Settings.RESPONSE.AMICI+" "+ token+" "+ users.listaAmici(tokens[1]).toJSONString()+" \n"+
-                Settings.RESPONSE.PENDING+" "+ token+" "+ users.listaRichieste(tokens[1]).toJSONString()+" \n" +
-                Settings.RESPONSE.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(tokens[1]).toJSONString();
-
-    }
-
-    public void logout(String nick){
-        users.logout(nick);
-    }
-
-    /**
-     * Crea la sfida tra i due users inoltrando la richiesta udp all'altro
-     * @param tokens
-     * @return true false
-     */
-    public String sfida(String[] tokens) throws UserNotOnline, UserNotExists, UserAlreadyInGame, ChallengeException {
-        if (users.validateToken(tokens[1], tokens[2])){
-            switch (Settings.RQTType.valueOf(tokens[4])) {
-                case RICHIEDI:
-                    //todo accettarla direttamente se già richiesta??
-                    try {
-                        if(!users.isInChallenge(tokens[1]) && !users.isInChallenge(tokens[3])
-                                && !users.hasChallengeRequest(tokens[1], tokens[3])
-                                && users.addPendingChallenge(tokens[1], tokens[3])) {
-
-                            inoltraRichiestaSfida(tokens[1], tokens[3]);
-                            //todo timer
-                            Timer t = new Timer();
-                            TimerTask tt = new TimerChallengeRequest(tokens[1], tokens[3], keys.get(tokens[1]), keys.get(tokens[3]), users);
-                            t.schedule(tt, Settings.TIMEOUT);
-                        }
-                        return Settings.RESPONSE.OK+" "+Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.RICHIESTA;
-                    } catch (IOException e) {
-                        users.removePendingChallenge(tokens[1], tokens[3]);
-                        throw new UserNotOnline();
-                    } catch (UserNotExists | UserNotOnline e){
-                        users.removePendingChallenge(tokens[1], tokens[3]);
-
-                        throw e;
-                    }
-                case ACCETTA:
-
-                        Challenge c = users.sfida(tokens[1], tokens[3]);
-                        //schedulo il timer di chiusura sfida
-
-                        Timer t = new Timer();
-                        TimerTask tt = new TimerChallengeEnd(keys.get(tokens[1]), keys.get(tokens[3]), c, users);
-                        t.schedule(tt, Settings.timer);
-                        //todo send ad entrambi sfida iniziata
-                        //todo usingk
-                        try{
-                            send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
-                                " " + tokens[1] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0)+"\n");
-
-                        }catch (IOException e){
-                            c.endChallenge();
-                            throw new UserNotOnline();
-                        }
-                        return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.INIZIATA+" "+c.getWord(0);
-
-                case RIFIUTA:
-                    //from friend to me
-                    users.removePendingChallenge(tokens[3], tokens[1]);
-                    try{
-                    send(keys.get(tokens[3]), Settings.RESPONSE.SFIDA + " " + users.getToken(tokens[3]) +
-                            " " + tokens[1] + " " + Settings.SFIDA.RIFIUTATA+"\n");
-                    }catch (IOException ignored){
-
-                    }
-                    return Settings.RESPONSE.SFIDA + " " + tokens[2] + " " + tokens[3] + " " + Settings.SFIDA.RIFIUTATA;
-
-            }
-             throw  new IllegalArgumentException();
         }
-        else
-            throw new WrongCredException();
     }
 
-
-
+    /*                      AMICIZIA                    */
 
     /**
-     * Inoltra la sfida su udp a friend
-     * @return true se la inoltra
+     * Gestisce il comando di amicizia
+     * @param nick utente che invia il comando
+     * @param friend utente a cui è rivolto
+     * @param t tipo di comando sull'amicizia
+     * @return risposta per il comando sulla sfida
+     * @throws FriendshipException se il comando è di richiesta e gli utenti sono già amici
+     * @throws UserNotExists se uno dei due non esiste
      */
-    public boolean inoltraRichiestaSfida(String nick, String friend) throws IOException, UserNotExists, UserNotOnline {
-        if(!users.isLogged(friend)) throw new UserNotOnline();
-        udp.write(nick, friend, users.getToken(friend), ((MyAttachment)keys.get(friend).attachment()).getUDPPort());
-        return true;
-    }
-
-    public String amicizia(String[] tokens) throws FriendshipException, WrongCredException, UserNotExists {
-        if (users.validateToken(tokens[1], tokens[2])){
-            Settings.RQTType type= Settings.RQTType.valueOf(tokens[4]);
-            String response=Settings.RESPONSE.AMICIZIA+" "+users.getToken(tokens[1])+" "+tokens[3]+" ";
-            switch(type){
-                case RICHIEDI:
-                    if(richiediAmicizia(tokens[1], tokens[3])) {
-                        response += Settings.RSPType.RICHIESTA;
-                    }
-                    else{
-                        response+=Settings.RSPType.ACCETTATA;
-                    }
-                    break;
-                case ACCETTA:
-                    accettaAmicizia(tokens[1], tokens[3]);
+    public String amicizia(String nick, String friend, String t) throws FriendshipException, UserNotExists {
+        Settings.RQTType type= Settings.RQTType.valueOf(t);
+        String response=Settings.RESPONSE.AMICIZIA+" "+token+" "+friend+" ";
+        switch(type){
+            case RICHIEDI:
+                if(richiediAmicizia(nick, friend)) {
+                    response += Settings.RSPType.RICHIESTA;
+                }
+                else{
                     response+=Settings.RSPType.ACCETTATA;
-                    break;
-                case RIFIUTA:
-                    //rimuovo dalla pending
-                    users.removePending(tokens[1], tokens[3]);
-                    response+=Settings.RSPType.RIFIUTATA;
-                    break;
-                default:
-                    break;
-            }
-            return response;
+                }
+                break;
+            case ACCETTA:
+                accettaAmicizia(nick, friend);
+                response+=Settings.RSPType.ACCETTATA;
+                break;
+            case RIFIUTA:
+                //rimuovo dalla pending
+                users.removePending(nick, friend);
+                response+=Settings.RSPType.RIFIUTATA;
+                break;
+            default:
+                break;
         }
-        else{
-            throw new WrongCredException();
-        }
+        return response;
     }
 
-
     /**
-     * inoltra la richiesta di amicizia a friend
-     * @param nick
-     * @param friend
+     * Inoltra la richiesta di amicizia a friend aggiungendo
+     * Se nick ha già la richiesta di amicizia da friend allora viene accettata direttamente
+     * @param nick from
+     * @param friend to
      * @return false se accetta direttamente l'amicizia perchè già nei pending
+     * @throws FriendshipException se sono già amici
+     * @throws UserNotExists se almeno uno dei due non esiste
      */
     public boolean richiediAmicizia(String nick, String friend) throws FriendshipException, UserNotExists {
-        //todo
-        //todo inoltra la richiesta all'altro
-        if(users.exists(friend) && !friend.equals(nick)) {
+        if(users.exists(nick) && users.exists(friend) && !friend.equals(nick)) {
             synchronized (users) {
                 if(!users.hasFriend(nick, friend)){
                     if (!users.containsPending(nick, friend) && users.addPending(nick, friend)) { //aggiungo nick ai pending di friend
@@ -342,114 +410,86 @@ public class WorkerTCP implements Runnable {
     }
 
     /**
-     * Acccetta l'amicizia e la inoltra
-     * @param nick
-     * @param friend
+     * Accetta l'amicizia e la inoltra
+     * @param nick utente che accetta
+     * @param friend utente che ha inviato l'amicizia
+     * @throws UserNotExists se non esiste
+     * @throws FriendshipException se non era stata richiesta l'amicizia
      */
-    public void accettaAmicizia(String nick, String friend) throws UserNotExists {
+    public void accettaAmicizia(String nick, String friend) throws UserNotExists, FriendshipException {
         //l'altro ha accettato, crea il legame e inoltra l'amicizia
-        //todo controllare se esiste legame
-        if(users.containsPending(nick, friend)) { //
-            users.aggiungiAmico(nick, friend);
-            inoltraAmicizia(nick, friend, Settings.RSPType.ACCETTATA);
+        if(users.containsPending(nick, friend)) { //controllo che esista la richiesta
+            if(users.aggiungiAmico(nick, friend)) {
+                inoltraAmicizia(nick, friend, Settings.RSPType.ACCETTATA);
+            }
         }
         else{
-            throw new IllegalArgumentException();
+            throw new FriendshipException("AMICIZIA NON RICHIESTA");
         }
     }
 
     /**
      * inoltra amicizia da nick a friend
-     * @param nick
-     * @param friend
-     * @param type
+     * @param nick from
+     * @param friend to
+     * @param type tipo di inoltro
      * @return true se la inoltra, false altrimenti
      */
     private boolean inoltraAmicizia(String nick, String friend, Settings.RSPType type) throws UserNotExists {
         String request=Settings.RESPONSE.AMICIZIA+" "+ users.getToken(friend)+" "+nick+" "+type;
         SelectionKey k= keys.get(friend);
         if(k==null) return false; //se non è registrata la key non la inoltro (non è online)
+
         try {
-            synchronized (usingK) {
-                while (usingK.putIfAbsent(k, k) != null) {
-                    usingK.wait();
-                }
-            }
-
-            try {
-                send(k, request + "\n");
-            }catch (IOException e){
-                    //e.printStackTrace();
-                    /*System.out.println("Disconnected");
-                    //todo cancellare sfide attive, logout, cancellare token
-                    logout(((MyAttachment)k.attachment()).getNick());
-                    k.cancel();*/
-                    return false;
-            }
-
-            synchronized (usingK) {
-                usingK.remove(k);
-                usingK.notify();
-            }
-            return true;
-        } catch (InterruptedException e) {
-            e.printStackTrace();
+            send(k, request + "\n");
+        }catch (IOException e){
+            //e.printStackTrace();
+                /*System.out.println("Disconnected");
+                //todo cancellare sfide attive, logout, cancellare token
+                logout(((MyAttachment)k.attachment()).getNick());
+                k.cancel();*/
             return false;
         }
+
+        return true;
     }
 
+    /*                      GET                         */
+
     /**
-     *
-     * @param tokens
-     * @return Restituisce lista amici, classifica o lista richieste
+     * Gestisce i comandi GET
+     * @param nick utente che effettua la richiesta
+     * @param t tipo di richiesta
+     * @return Restituisce JSON con lista amici, classifica o lista richieste
      * @throws UserNotExists se l'utente non esiste
      */
-    private String get(String[] tokens) throws UserNotExists {
-        Settings.GetType type=Settings.GetType.valueOf(tokens[3]);
+    private String get(String nick, String t) throws UserNotExists {
+        Settings.GetType type=Settings.GetType.valueOf(t);
         switch(type){
             case AMICI:
-                return Settings.GetType.AMICI+" "+ users.getToken(tokens[1])+" "+ users.listaAmici(tokens[1]).toJSONString();
+                return Settings.GetType.AMICI+" "+ token+" "+ users.listaAmici(nick).toJSONString();
             case CLASSIFICA:
-                return Settings.GetType.CLASSIFICA+" "+ users.getToken(tokens[1])+" "+ users.mostraClassifica(tokens[1]).toJSONString();
+                return Settings.GetType.CLASSIFICA+" "+ token+" "+ users.mostraClassifica(nick).toJSONString();
             case PENDING:
-                return Settings.GetType.PENDING+" "+ users.getToken(tokens[1])+" "+ users.listaRichieste(tokens[1]).toJSONString();
+                return Settings.GetType.PENDING+" "+ token+" "+ users.listaRichieste(nick).toJSONString();
             default:
                 return null;
         }
     }
 
-    /**
-     * Accetta le connessioni in arrivo
-     *
-     * @param k
-     * @throws IOException
-     */
-    public void accept(SelectionKey k) throws IOException {
-        ServerSocketChannel server = (ServerSocketChannel) k.channel();
-        SocketChannel client = server.accept();
-        System.out.println("Accepted connection from " + client);
-        client.configureBlocking(false);
-        ByteBuffer buffer = ByteBuffer.allocate(Settings.TCPBUFFLEN);
-        //todo attach nick e port
-        MyAttachment att=new MyAttachment(buffer);
-        SelectionKey cK = client.register(selector, SelectionKey.OP_READ, att);
-
-    }
+    /*                      READ/SEND                   */
 
     /**
      * Legge il channell associato a k
-     *
-     * @param k
+
      * @throws IOException
      */
-    public String read(SelectionKey k) throws IOException {
-        //todo scanner
+    public String read() throws IOException {
         StringBuilder request = new StringBuilder();
         SocketChannel client = (SocketChannel) k.channel();
         ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
-
-        //Scanner scanner = new Scanner(client.socket());
         //TODO lasciare nel buffer i comandi dopo \n oppure invio la quantità da leggere
+        //todo leggere solo lunghezza buffer (client deve inviare sempre la stessa lunghezza di comandi)
         int read = client.read(buffer);
         byte[] bytes;
         while (read > 0) {
@@ -471,20 +511,22 @@ public class WorkerTCP implements Runnable {
     /**
      * Scrive sul channell associato a k
      *
-     * @param k
      * @param response
      * @throws IOException
      */
-    public void send(SelectionKey k, String response) throws IOException {
-        //todo send scrittura multiplo di BUFFLEN
+    public void send(String response) throws IOException {
         SocketChannel client = (SocketChannel) k.channel();
+
+        ByteBuffer buf = ByteBuffer.wrap( response.getBytes() );
+        while(buf.hasRemaining()){
+            client.write(buf);
+        }
+
+        /**
+         * PIU LENTO MA POTREBBE ESSERE MIGLIORE PER RISPOSTE MOLTO GRANDI???
         ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
         int written = 0;
-        //todo align response to kBUFFLEN
         response.length();
-
-        response="System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()System.currentTimeMillis()";
-        long start= System.nanoTime();
         byte[] b = response.getBytes();
         while ((b.length - written) > 0) { //ciclo fino a che non ho scritto tutto
             if ((b.length - written) % buffer.capacity() != 0)
@@ -503,11 +545,49 @@ public class WorkerTCP implements Runnable {
             }
 
             buffer.clear();
+        }*/
+
+    }
+
+    /**
+     * Scrive sul channell associato a k
+     * @param k selection key sulla quale si vuole inviare la risposta
+     * @param response risposta
+     * @throws IOException
+     */
+    public void send(SelectionKey k, String response) throws IOException {
+        SocketChannel client = (SocketChannel) k.channel();
+
+        ByteBuffer buf = ByteBuffer.wrap( response.getBytes() );
+        while(buf.hasRemaining()){
+            client.write(buf);
         }
-        long elap= System.nanoTime()- start;
-        System.out.println("0Elapsed Time is " + (elap / 1000000.0)
-                + " msec");
-         
+
+        /**
+         * PIU LENTO MA POTREBBE ESSERE MIGLIORE PER RISPOSTE MOLTO GRANDI???
+         ByteBuffer buffer = ((MyAttachment) k.attachment()).getBuffer();
+         int written = 0;
+         response.length();
+         byte[] b = response.getBytes();
+         while ((b.length - written) > 0) { //ciclo fino a che non ho scritto tutto
+         if ((b.length - written) % buffer.capacity() != 0)
+         buffer.put(Arrays.copyOfRange(b, written, (written) + ((b.length - written) % buffer.capacity())));
+         else buffer.put(Arrays.copyOfRange(b, written, (written) + buffer.capacity())); //copio una parte
+
+
+         buffer.flip();
+         int w = 0;
+         while (w < buffer.limit()) {
+         //System.out.println(new String(buffer.array()));
+         w = client.write(buffer);
+
+         written += w;
+         //System.out.println(w);
+         }
+
+         buffer.clear();
+         }*/
+
     }
 
 }

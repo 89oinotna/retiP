@@ -1,8 +1,7 @@
 
 
 
-import exceptions.UserAlreadyExists;
-import exceptions.UserNotExists;
+
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -13,7 +12,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.time.LocalDateTime;
 import java.util.*;
 
 public class Server {
@@ -29,55 +27,34 @@ public class Server {
     private static final int n=200;
 
     public Server() {
-        dict= Collections.synchronizedList(new ArrayList<String>(n));
-        try {
-            File file = new File("dict.txt");
-            Scanner ss = new Scanner(file);
-            while (ss.hasNextLine()) {
-                String data = ss.nextLine();
-                if (data.length() > 3) dict.add(data);
+
+        //Leggi il dizionario e settalo per le sfide
+        dict= new ArrayList<>(n);
+        try (BufferedReader reader = new BufferedReader(new FileReader("dict.txt"))) {
+            String parola;
+            while ((parola=reader.readLine())!=null) {
+                 dict.add(parola);
 
             }
         }catch (Exception e){
             e.printStackTrace();
         }
-        long startTime = System.nanoTime();
-        try (FileInputStream in = new FileInputStream("utenti.json");
-             ) {
-            ByteArrayOutputStream out=new ByteArrayOutputStream();
+        Challenge.setDict(dict);
 
+        //Leggi il file degli utenti, se non esiste crealo, e crea l'oggetto
+        try (FileInputStream in = new FileInputStream("utenti.json")) {
+            ByteArrayOutputStream out=new ByteArrayOutputStream();
             byte[] byteArray = new byte[1024]; // byte-array
             int bytesCount;
             while ((bytesCount = in.read(byteArray)) != -1) {
-                out.write(byteArray, 0, bytesCount);}
-            long elapsedTime = System.nanoTime() - startTime;
-            System.out.println("Elapsed Time is " + (elapsedTime / 1000000.0)
-                    + " msec");
+                out.write(byteArray, 0, bytesCount);
+            }
             JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(out.toString()));
-            u = new Users(utentiJSON, dict);
-        } catch (IOException | ParseException ex) { ex.printStackTrace(); }
-        //try {
+            u = new Users(utentiJSON);
 
-                //File file = new File("utenti.json");
-
-               /* Scanner ss = new Scanner(file);
-                StringBuilder json=new StringBuilder();
-
-
-            while (ss.hasNext()) {
-                    json.append(ss.next());
-                }*/
-
-
-            //StringBuilder json=new StringBuilder();
-                //JSONArray utentiJSON = (JSONArray) (new JSONParser().parse(json.toString()));
-                //u = new Users(utentiJSON, dict);
-            //} catch (FileNotFoundException ex) {
-            /*ex.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }*/
-
+        } catch (IOException | ParseException ex) {
+            u=new Users();
+        }
 
         serverrmi = new ServerRMI(8082, u);
         servertcp=new ServerTCP(8080, u);
@@ -85,35 +62,40 @@ public class Server {
         tcpTH.start();
     }
 
+    /**
+     * Esegue il salvataggio del server nel file utenti.json
+     */
     public void save() {
         try {
 
-            FileChannel outChannel = FileChannel.open(Paths.get("utenti.json"), StandardOpenOption.WRITE);
-
-
+            FileChannel outChannel = FileChannel.open(Paths.get("utenti.json"), StandardOpenOption.CREATE,StandardOpenOption.WRITE);
             System.out.println("Writing JSON object to file");
             JSONArray utentiJSON = new JSONArray();
             for (Iterator<User> it = u.getIterator(); it.hasNext(); ) {
                 utentiJSON.add(it.next().toJSON());
             }
-
-
-            ByteBuffer buffer = ByteBuffer.wrap(utentiJSON.toJSONString().getBytes());
+            ByteBuffer buffer = ByteBuffer.wrap(utentiJSON.toJSONString().getBytes()); //Brutale?
             outChannel.write(buffer);
+
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
     public static void main(String[] args) {
+        //todo thread che salva periodicamente
         Server s = new Server();
-
-        //s.test1();
+        /*
+        Blocco il server in readline
+        Se si inserisce un numero>0 il server salva
+            altrimenti salva e si chiude
+         */
         Scanner sc=new Scanner(System.in);
-        if(sc.nextInt()>0){
+        while(sc.nextInt()>0){
             s.save();
         }
-        //s.save();
+        s.save();
+        System.exit(0);
     }
 
 

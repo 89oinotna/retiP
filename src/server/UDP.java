@@ -11,15 +11,15 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
 
+/**
+ * Classe udp che si occupa dell'inoltro delle richieste di sfida
+ */
 public class UDP {
     private DatagramSocket udp;
     private InetAddress address;
     public UDP(){
         try {
             udp = new DatagramSocket(8081);
-
-        //udp.setSoTimeout(Settings.UDP_TIMEOUT);
-
             address = InetAddress.getByName(Settings.HOST_NAME);
 
         }catch (SocketException | UnknownHostException e) {
@@ -27,6 +27,14 @@ public class UDP {
         }
     }
 
+    /**
+     * Invio della richiesta di sfida
+     * @param nick from
+     * @param friend to
+     * @param friendToken token di sessione
+     * @param port porta udp di friend
+     * @throws IOException
+     */
     public void write(String nick, String friend, String friendToken, int port) throws IOException {
         String msg = Settings.RESPONSE.SFIDA+" "+friend+" "+
                 friendToken+" "+nick+" \n";
@@ -35,8 +43,5 @@ public class UDP {
                 port);
         udp.send(packet);
     }
-
-
-
 
 }

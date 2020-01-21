@@ -6,6 +6,7 @@ import java.rmi.Remote;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.RemoteServer;
 import java.util.List;
 import java.util.Scanner;
 
@@ -30,14 +31,8 @@ public class ClientRMI {
         }
     }
 
-    public String registraUtente(String nickname, String password) {
-        try {
+    public String registraUtente(String nickname, String password) throws RemoteException {
+            if(serverObject==null) throw new RemoteException();
             return serverObject.registraUtente(nickname, password);
-        } catch (RemoteException e) {
-            e.printStackTrace();
-            return null;
-        }
-
-
     }
 }

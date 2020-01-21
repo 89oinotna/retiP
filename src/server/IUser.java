@@ -5,7 +5,7 @@ import exceptions.UserAlreadyLogged;
 import exceptions.UserNotExists;
 import exceptions.WrongCredException;
 
-import java.nio.channels.SelectionKey;
+
 import java.util.List;
 
 public interface IUser {
@@ -25,6 +25,8 @@ public interface IUser {
      * Effettua il logout dell'utente
      */
     void logout();
+
+    boolean hasFriend(String friend);
 
     /**
      * Aggiunge friend alla lista amici
@@ -66,5 +68,23 @@ public interface IUser {
      */
     List<String> getPendings();
 
+    /**
+     * Restituisce il nickname dell'utente
+     * @return
+     */
+    String getNickname();
 
+    /**
+     * Aggiunge i punti all'utente
+     *
+     * @param i punti da aggiungere
+     * @return punteggio aggiornato
+     */
+    int addScore(int i);
+
+    /**
+     *
+     * @return punteggio dell'utente
+     */
+    int getScore();
 }

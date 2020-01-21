@@ -30,6 +30,22 @@ public class SfidaTile extends JPanel implements CustomTile {
 
     }
 
+    public SfidaTile(String friend){
+        this.friend=new JLabel(friend);
+        this.parola=new JLabel();
+        traduzione=new JTextField();
+        sendBT=new JButton();
+        sendBT.setText("SEND");
+        this.setLayout(new GridLayout(0,1));
+        this.add(this.friend);
+        this.add(this.parola);
+        this.add(this.traduzione);
+        this.add(this.sendBT);
+
+
+
+    }
+
     public String getTraduzione(){
         return traduzione.getText();
     }

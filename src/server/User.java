@@ -5,7 +5,6 @@ import exceptions.UserAlreadyLogged;
 import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 
-import java.nio.channels.SelectionKey;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -16,19 +15,18 @@ public class User implements IUser {
     private int score;
     private boolean logged;
     private ConcurrentHashMap<String, String> friends;
-    private ConcurrentHashMap<String, String> pending;
+    private ConcurrentHashMap<String, String> pendingFriend;
     private ConcurrentHashMap<String, String> challengeRequest;
     private Challenge challenge;
-    private SelectionKey k;
+
     private String token;
 
     public User(JSONObject user) {
         friends = new ConcurrentHashMap<>();
-        pending=new ConcurrentHashMap<>();
+        pendingFriend =new ConcurrentHashMap<>();
         challengeRequest=new ConcurrentHashMap<>();
         logged = false;
         token="";
-        k=null;
         nickname = user.get("nickname").toString();
         password = user.get("password").toString();
         score = Integer.parseInt(user.get("score").toString());
@@ -38,7 +36,7 @@ public class User implements IUser {
         }
         JSONArray pendingJSON = (JSONArray) user.get("pending");
         for (int i = 0; i < pendingJSON.size(); i++) {
-            pending.put(pendingJSON.get(i).toString(), pendingJSON.get(i).toString());
+            pendingFriend.put(pendingJSON.get(i).toString(), pendingJSON.get(i).toString());
         }
 
     }
@@ -50,19 +48,11 @@ public class User implements IUser {
         score = 0;
         //logged = true; //si logga alla registrazione
         friends = new ConcurrentHashMap<>();
-        pending=new ConcurrentHashMap<>();
+        pendingFriend =new ConcurrentHashMap<>();
         challengeRequest=new ConcurrentHashMap<>();
-        k=null;
+
 
     }
-
-   /* public SelectionKey getK() {
-        return k;
-    }*/
-
-    /*public void setK(SelectionKey k) {
-        this.k = k;
-    }*/
 
     public Challenge getChallenge() {
         return challenge;
@@ -98,6 +88,10 @@ public class User implements IUser {
         this.score = score;
     }
 
+    public int addScore(int i) {
+        return score+=i;
+    }
+
     public boolean isLogged() { return logged;  }
 
     public void login(String token) throws UserAlreadyLogged{
@@ -111,7 +105,11 @@ public class User implements IUser {
         token="";
     }
 
-    /*                      FRIENDS METHOD                      */
+    /*                      FRIENDS                      */
+
+    public boolean hasFriend(String friend) {
+        return friends.get(friend)!=null;
+    }
 
     public void addFriend(String friend) {
         friends.putIfAbsent(friend, friend);
@@ -122,21 +120,60 @@ public class User implements IUser {
 
     public boolean addPending(String friend) throws FriendshipException {
 
-        if(pending.putIfAbsent(friend, friend)==null)
+        if(pendingFriend.putIfAbsent(friend, friend)==null)
             return true;
         throw new FriendshipException("FriendshipExists");
     }
 
-    public void removePending(String friend){ pending.remove(friend); }
+    public void removePending(String friend){ pendingFriend.remove(friend); }
 
     public List<String> getFriends() {
         return new ArrayList<String>(friends.keySet());
     }
 
-    public List<String> getPendings(){ return new ArrayList<String>(pending.keySet()); }
+    public List<String> getPendings(){ return new ArrayList<String>(pendingFriend.keySet()); }
 
+    /*                      CHALLENGE                   */
 
-    /*                      JSON METHODS                        */
+    /**
+     * Controlla l'esistenza di una richiesta di sfida da friend
+     * @param friend from
+     * @return true se esiste, false altrimenti
+     */
+    public boolean hasChallengeRequest(String friend) {
+        return challengeRequest.get(friend)!=null;
+    }
+
+    /**
+     * Aggiunge una richiesta di sfida alla lista delle richieste dell'utente
+     * @param friend from
+     * @return true se non era già presente, false altrimenti
+     */
+    public boolean addChallengeRequest(String friend){
+        return challengeRequest.putIfAbsent(friend, friend)==null;
+    }
+
+    /**
+     * Rimuove una richiesta di sfida alla lista delle richieste dell'utente
+     * @param friend from
+     * @return true se era presente ed è stato rimosso, false altrimenti
+     */
+    public boolean removeChallengeRequest(String friend) {
+        return challengeRequest.remove(friend)!=null;
+    }
+
+    /**
+     * Controlla che l'utente abbia una sfida attiva
+     * @return true se ce l'ha, false altrimenti
+     */
+    public boolean isInChallenge(){
+        if(challenge==null)return false;
+        synchronized (challenge) {
+            return challenge.isActive();
+        }
+    }
+
+    /*                      JSON                        */
 
     public JSONObject toJSON() {
         JSONObject json = new JSONObject();
@@ -149,39 +186,12 @@ public class User implements IUser {
         for (String nome : friends.keySet()) {
             friendsJSON.add(nome);
         }
-        for (String nome : pending.keySet()) {
+        for (String nome : pendingFriend.keySet()) {
             pendingJSON.add(nome);
         }
         json.put("friends", friendsJSON);
         json.put("pending", pendingJSON);
 
         return json;
-    }
-
-
-    public void addScore(int i) {
-        score+=i;
-    }
-
-    public boolean hasChallengeRequest(String friend) {
-        return challengeRequest.get(friend)!=null;
-    }
-
-    public boolean addChallengeRequest(String friend){
-        return challengeRequest.putIfAbsent(friend, friend)==null;
-    }
-
-    /**
-     *
-     * @param friend
-     * @return true se è stato rimosso
-     */
-    public boolean removeChallengeRequest(String friend) {
-        return challengeRequest.remove(friend)!=null;
-    }
-
-
-    public boolean hasFriend(String friend) {
-        return friends.get(friend)!=null;
     }
 }

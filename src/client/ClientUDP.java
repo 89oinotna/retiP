@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClientUDP implements Runnable{
     private DatagramSocket socket;
     private InetAddress IPAddress;
-    private ConcurrentHashMap<String, LocalDateTime> richiesteSfida;
+    private ConcurrentHashMap<String, String> richiesteSfida;
     private String loggedNick;
     private String token;
 
@@ -21,7 +21,7 @@ public class ClientUDP implements Runnable{
         this.token=token;
     }
 
-    public ClientUDP(ConcurrentHashMap<String, LocalDateTime> richiesteSfida){
+    public ClientUDP(ConcurrentHashMap<String, String> richiesteSfida){
         this.richiesteSfida=richiesteSfida;
 
         try {
@@ -71,7 +71,7 @@ public class ClientUDP implements Runnable{
                     //todo valida token
 
                     synchronized (richiesteSfida){
-                        richiesteSfida.put(tokens[3], LocalDateTime.now());
+                        richiesteSfida.put(tokens[3], tokens[3]);
                         richiesteSfida.notify();
                     }
                 }

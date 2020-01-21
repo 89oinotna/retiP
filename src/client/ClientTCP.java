@@ -12,14 +12,29 @@ import java.io.InputStreamReader;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.SocketChannel;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 
-//LOGIN E REGISTRAZIONE WRITE E READ SERIALI NELLA STESSA FUNZIONE
-//ALTRI COMANDI:
+
+/**
+ * Classe che implementa tutti i metodi per la gestione della parte tcp del server
+ *
+ * Per l'invio di comandi al server si invocano le funzioni sull'oggetto
+ *
+ * Quando il thread viene avviato è bloccato sulla read, è possibile ricevere due tipi di risposte dal server::
+ * 1)Risposte sincrone: risposte ai comandi inviati dal client
+ *                      è possibile accedere all'ultima risposta ricevuta con il metodo getResponse()
+ * 2)Risposte asincrone: risposte che il server invia per notificare eventi
+ *                       Per le risposte asincrone (Aggiornamenti su richieste di amicizia, amicizie, classifica, sfide)
+ *                          utilizza delle variabili condivise sulle quali effettua le varie operazioni richieste dal
+ *                          server
+ *
+ *
+ */
 public class ClientTCP implements Runnable{
     private SocketAddress address;
     private SocketChannel socketChannel;
@@ -30,23 +45,23 @@ public class ClientTCP implements Runnable{
     private List<String> friendsList;
     private List<String> classificaList;
     private String token;
-    private ConcurrentHashMap<String, LocalDateTime> richiesteSfida;
+    private ConcurrentHashMap<String, String> richiesteSfida;
     private StringBuilder lastResponse;
     private String loggedNick;
     private List<String> sfida;
-
-    private UDP udp;
 
     public ClientTCP(List<String> sfida,
                      List<String> pendingFriendsList,
                      List<String> friendsList,
                      List<String> classificaList,
-                     ConcurrentHashMap<String, LocalDateTime> richiesteSfida){
+                     ConcurrentHashMap<String, String> richiesteSfida){
         this.sfida=sfida;
         this.pendingFriendsList=pendingFriendsList;
         this.friendsList=friendsList;
         this.classificaList=classificaList;
         this.richiesteSfida=richiesteSfida;
+        loggedNick=null;
+        token=null;
         address = new InetSocketAddress("127.0.0.1", 8080);
         lastResponse=new StringBuilder();
 
@@ -54,139 +69,104 @@ public class ClientTCP implements Runnable{
             socketChannel = SocketChannel.open();
             //socketChannel.configureBlocking(false);
             socketChannel.connect(address);
-            //socketChannel.configureBlocking(false);
-
             byteBuffer=ByteBuffer.allocate(BUFFLEN);
             while (!socketChannel.finishConnect()) {
                 System.out.println("Non terminata la connessione");
             }
             System.out.println("Terminata la connessione");
 
-
-            scanner = new Scanner(new InputStreamReader(socketChannel.socket().getInputStream(), "ASCII"));
-            //scanner.useDelimiter("\n");
-
+            scanner = new Scanner(new InputStreamReader(socketChannel.socket().getInputStream(), StandardCharsets.UTF_8));
 
         } catch (IOException e) {
             e.printStackTrace();
 
         }
 
-    }
-
-    public String read(){
-        String response=scanner.nextLine();
-        while(response==null) {
-            response = scanner.nextLine();
-        }
-        return response;
-    }
-
-    public void send(String message){
-        //todo aggiusta
-        System.out.println("REQUEST: "+message);
-        ByteBuffer buf = ByteBuffer.wrap((message+"  \n").getBytes());
-        try {
-            while (buf.hasRemaining()) {
-                int w=socketChannel.write(buf);
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-
-        }
-        buf.clear();
     }
 
     /**
-     * effettua il login su tCP
-     * @param nick
-     * @param pw
-     * @return il token per la sessione
+     * @return true se si è loggati, false altrimenti
      */
-    public String login(String nick, String pw, int udpPort){
-        String message="LOGIN "+nick+" "+pw+" "+udpPort;
+    public boolean isLogged(){
+        return loggedNick!=null;
+    }
+
+    /**
+     * Effettua la richiesta di login dell'utente
+     * @param nick utente
+     * @param pw password
+     * @return stringa di risposta del server
+     */
+    public String login(String nick, String pw, int udpPort) throws IOException{
+        String message=Settings.RESPONSE.LOGIN+" "+nick+" "+pw+" "+udpPort;
         send(message);
         String response=read();
+        String[] tokens=response.split(" ");
+        if(Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
+            loggedNick=nick;
+            token=tokens[2];
+        }
         return response;
     }
 
+    /**
+     * Effettua la richiesta di logout dell'utente
+     */
+    public void logout() {
+        try{
+            String request=Settings.REQUEST.LOGOUT+" "+loggedNick+" "+token;
+            send(request);
+        }catch(IOException ex){}
+
+    }
 
     @Override
     public void run() {
-        while(!Thread.currentThread().isInterrupted()){
-
-            String response=read();
-            System.out.println("RESPONSE: "+response);
-            manageCommand(response);
-        }
-    }
-
-    /**
-     * restituisce l'ultima risposta a un comando
-     * @return
-     */
-    public synchronized String getResponse(){
-
-        synchronized (lastResponse){
-            lastResponse.setLength(0);
-            while(lastResponse.length()<1) {
-                try {
-                    lastResponse.wait();
-
-
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-
+        try{
+            while (!Thread.currentThread().isInterrupted()) {
+                String response = read();
+                System.out.println("RESPONSE: " + response);
+                manageCommand(response);
             }
-            String response=lastResponse.toString();
-            lastResponse.setLength(0);
-            return response;
+        }catch (NoSuchElementException e){
+            System.out.println("Server Disconnected");
         }
-
-
     }
 
     /**
-     * Gestisce i comandi ricevuto
+     * Gestisce il comando ricevuto
      * @param response
      */
     public void manageCommand(String response){
-        //todo cambiare risposte server
-
-
         String[] tokens=response.split(" ");
         //quelli che iniziano con OK NOK sono in risposta a richieste
         if ((tokens[0].equals("OK") || tokens[0].equals("NOK")) && tokens[2].equals(token)) {
             synchronized (lastResponse) {
+                lastResponse.setLength(0);
                 lastResponse.append(response);
                 lastResponse.notify();
             }
-
-
         }
-
         else if(tokens[1].equals(token)) { //validazione tramite token della risposta
-
             //ASYNC
-            switch (tokens[0]) {
+            switch (Settings.RESPONSE.valueOf(tokens[0])) {
                 //AMICIZIA TOKEN NICK TYPE
-                case "AMICIZIA":
+                case AMICIZIA:
                     manageAmicizia(tokens[2], tokens[3]);
                     break;
-                case "AMICI":
+                case AMICI:
                     //todo oggettojson
                     manageAmici(tokens[2]);
                     break;
-                case "CLASSIFICA": //async
+                case CLASSIFICA: //async
                     //todo oggettojson classifica
                     manageClassifica(tokens[2]);
                     break;
-                case "PENDING":
+                case PENDING:
                     //todo oggettojson
                     managePendingFriends(tokens[2]);
                     break;
-                case "SFIDA":
+                case SFIDA:
                     try {
                         manageSfida(tokens[2], tokens[3], tokens[4]);
                     }catch(ArrayIndexOutOfBoundsException e){
@@ -210,13 +190,39 @@ public class ClientTCP implements Runnable{
     }
 
     /**
+     * restituisce l'ultima risposta a un comando
+     * @return
+     */
+    public synchronized String getResponse(){
+
+        synchronized (lastResponse){
+            while(lastResponse.length()<1) {
+                try {
+                    lastResponse.wait();
+
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+
+            }
+            String response=lastResponse.toString();
+            lastResponse.setLength(0);
+            return response;
+        }
+
+
+    }
+
+    /**
      * invia la sfida ad un amico
      * @param friend
      * @return true se accettata, false altrimenti
      */
-    public void inviaSfida(String friend){
+    public String inviaSfida(String friend) throws IOException{
         String request="SFIDA "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RICHIEDI;
         send(request);
+        return getResponse();
 
     }
 
@@ -225,7 +231,12 @@ public class ClientTCP implements Runnable{
 
         switch(Settings.SFIDA.valueOf(type)){
             case ACCETTATA:
-
+                synchronized (sfida) {
+                    if (sfida.isEmpty()) {
+                        sfida.add(friend);
+                        sfida.notify();
+                    }
+                }
                 break;
             case RIFIUTATA:
             case SCADUTA:
@@ -247,7 +258,7 @@ public class ClientTCP implements Runnable{
                 break;
             case TERMINATA:
                 synchronized (sfida) {
-                    if(sfida.size()>0) {
+                    if(sfida.isEmpty()) {
                         sfida.add(p);
                         sfida.notify();
                     }
@@ -315,7 +326,7 @@ public class ClientTCP implements Runnable{
     /**
      * Invia la richiesta di amicizia
      */
-    public String aggiungiAmico(String friend){
+    public String aggiungiAmico(String friend) throws IOException{
         String request= Settings.REQUEST.AMICIZIA+" " +loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RICHIEDI;
         send(request);
         String response=getResponse();
@@ -333,7 +344,7 @@ public class ClientTCP implements Runnable{
      * accetta la richiesta di amicizia
      * @param friend
      */
-    public boolean accettaAmico(String friend) {
+    public boolean accettaAmico(String friend) throws IOException{
 
         String request= Settings.REQUEST.AMICIZIA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
         send(request);
@@ -355,12 +366,12 @@ public class ClientTCP implements Runnable{
         return false;
     }
 
-    private void getClassifica() {
+    private void getClassifica() throws IOException{
         String request="GET "+loggedNick+" "+token+" CLASSIFICA";
         send(request);
     }
 
-    public boolean rifiutaAmico(String friend) {
+    public boolean rifiutaAmico(String friend) throws IOException{
         String request="AMICIZIA "+loggedNick+" "+token+" "+friend+" RIFIUTA";
         send(request);
         String[] tokens=getResponse().split(" ");
@@ -383,9 +394,15 @@ public class ClientTCP implements Runnable{
     /**
      * Richiede le informazioni di tipo type sull'utente
      */
-    public void getRequest(Settings.GetType type){
+    public void getRequest(Settings.GetType type)  {
         String request = Settings.REQUEST.GET+" "+loggedNick+" "+token+" "+type;
-        send(request);
+        try {
+            send(request);
+        }
+        catch (IOException ignored){
+
+        }
+
         //todo server return json object
         //response OK LIST ...
         //response NOK eccezione
@@ -422,7 +439,9 @@ public class ClientTCP implements Runnable{
                     friendsList.notify();
                 }
                 //get classifica
+
                 getRequest(Settings.GetType.CLASSIFICA);
+
                 //todo gui.addFriendTile(friend);
                 break;
             case "RIFIUTATA":
@@ -447,7 +466,7 @@ public class ClientTCP implements Runnable{
      * @param traduzione
      * @return
      */
-    public String inviaTraduzione(String traduzione) throws Exception{
+    public String inviaTraduzione(String traduzione) throws IllegalArgumentException, IOException{
         String request=Settings.REQUEST.PAROLA+" "+loggedNick+" "+token+" "+traduzione;
         send(request);
         String response=getResponse();
@@ -456,7 +475,7 @@ public class ClientTCP implements Runnable{
             if(Settings.RESPONSE.valueOf(tokens[1]).equals(Settings.RESPONSE.SFIDA)
                 && Settings.SFIDA.valueOf(tokens[4]).equals(Settings.SFIDA.TERMINATA)){
                 synchronized (sfida) {
-                    if(sfida.size()>0) {
+                    if(sfida.isEmpty()) {
                         sfida.add(tokens[5]);
                         sfida.notify();
                     }
@@ -467,12 +486,26 @@ public class ClientTCP implements Runnable{
                 return tokens[3];
             }
         }
-        throw new Exception(response);
+        throw new IllegalArgumentException(response);
     }
 
-    public void accettaSfida(String friend) {
-        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
+    public String accettaSfida(String friend) throws IOException{
+        String request=Settings.REQUEST.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
         send(request);
+        synchronized (richiesteSfida){
+
+            richiesteSfida.remove(friend);
+            richiesteSfida.notify();
+        }
+        return getResponse();
+
+
+    }
+
+    public void rifiutaSfida(String friend) throws IOException{
+        String request=Settings.REQUEST.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
+        send(request);
+
         synchronized (richiesteSfida){
 
             richiesteSfida.remove(friend);
@@ -482,17 +515,28 @@ public class ClientTCP implements Runnable{
 
     }
 
-    public void rifiutaSfida(String friend) {
-        String request=Settings.RESPONSE.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
-        send(request);
+    public String read() throws NoSuchElementException{
+        String response=scanner.nextLine();
+        while(response==null) {
+            response = scanner.nextLine();
+        }
+        return response;
+    }
 
-        synchronized (richiesteSfida){
+    public void send(String message) throws IOException, AsynchronousCloseException {
+        //todo aggiusta
+        System.out.println("REQUEST: "+message);
+        ByteBuffer buf = ByteBuffer.wrap((message+"  \n").getBytes());
 
-            richiesteSfida.remove(friend);
-            richiesteSfida.notify();
+        while (buf.hasRemaining()) {
+            socketChannel.write(buf);
         }
 
+        buf.clear();
+    }
 
+    public String getLoggedNick() {
+        return loggedNick;
     }
 }
 

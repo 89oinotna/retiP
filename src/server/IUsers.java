@@ -1,7 +1,8 @@
 package server;
 
 import exceptions.*;
-import org.json.simple.JSONArray;
+
+import java.util.List;
 
 public interface IUsers {
 
@@ -26,33 +27,54 @@ public interface IUsers {
     /**
      * Effettua il logout dell'utente
      * @param nick
-     * @return
      */
     void logout(String nick);
+
+    /**
+     * Controlla se l'utente è online
+     * @param nick
+     * @return true se è online, false altrimenti
+     */
+    boolean isLogged(String nick);
+
+    /**
+     * Controlla l'esistenza di un utente
+     * @param nick
+     * @return true se esiste, flase altrimenti
+     */
+    boolean exists(String nick);
 
     /**
      * Rimuove dalla pending list
      * Aggiunge l'amicizia tra nick e friend aggiornando la lista di amici di entrambi
      * se già c'è non fa nulla
-     *
-     * @param nick
+     *  @param nick
      * @param friend
+     * @return true se l'amiciz a non era già presente, false altrimenti
      */
-    void aggiungiAmico(String nick, String friend) throws UserNotExists;
+    boolean aggiungiAmico(String nick, String friend) throws UserNotExists;
 
     /**
-     * Restituisce un JSONArray con la lista degli amici
+     * Controlla che l'utente nick ha come amico friend
+     * @param nick
+     * @param friend
+     * @return true se esiste l'amicizia, flase altrimenti
+     */
+    boolean hasFriend(String nick, String friend);
+
+    /**
+     * Restituisce la lista degli amici
      * @param nick
      * @return lista degli amici
      */
-    JSONArray listaAmici(String nick);
+    List<String> getFriends(String nick) throws UserNotExists;
 
     /**
      * Restituisce la lista delle richieste di amicizia
      * @param nick
      * @return lista delle richieste di amicizia in sospeso
      */
-    JSONArray listaRichieste(String nick);
+    List<String> getPendings(String nick);
 
     /**
      * Aggiunge una richiesta di amicizia
@@ -71,11 +93,19 @@ public interface IUsers {
     void removePending(String nick, String friend);
 
     /**
+     * Controlla che nick abbia la richiesta di amicizia da friend
+     * @param nick
+     * @param friend
+     * @return true se ce l'ha, false altrimenti
+     */
+    boolean containsPending(String nick, String friend);
+
+    /**
      * Restituisce la classifica formata dagli amici dell'utente
      * @param nick
      * @return lista degli amici ordinati secondo il punteggio
      */
-    JSONArray  mostraClassifica(String nick);
+    List<IUser> getLeaderboard(String nick);
 
     /**
      * Restituisce il punteggio del'utente nick
@@ -85,25 +115,7 @@ public interface IUsers {
      */
     int mostraPunteggio(String nick);
 
-    /**
-     * Aggiorna il punteggio e restituisce il valore aggiornato
-     *
-     * @param nick
-     * @param punteggio
-     * @return punteggio aggiornato
-     * @throws UserNotExists se l'utente non esiste
-     */
-    int aggiornaPunteggio(String nick, int punteggio) throws UserNotExists;
 
-
-
-
-    /**
-     * Crea la sfida tra i due users
-     * @param nick
-     * @param friend
-     */
-    Challenge sfida(String nick, String friend) throws UserNotOnline, UserAlreadyInGame, ChallengeException;
 
 
 }
