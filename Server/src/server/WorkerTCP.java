@@ -59,13 +59,19 @@ public class WorkerTCP implements Runnable {
 
         } catch (IOException e) {
             e.printStackTrace();
-            System.out.println("Disconnected "+((MyAttachment)k.attachment()).getNick());
+            String nick=((MyAttachment)k.attachment()).getNick();
+            k.cancel();
+            if(nick!=null) {
+                System.out.println("Disconnected " +nick);
 
-            logout(((MyAttachment)k.attachment()).getNick());
+                logout(((MyAttachment) k.attachment()).getNick());
+            }
+
 
         }
         finally {
-            k.interestOps(SelectionKey.OP_READ);
+
+            //k.interestOps(SelectionKey.OP_READ);
             synchronized (usingK) {
                 usingK.remove(k);
             }
@@ -288,7 +294,7 @@ public class WorkerTCP implements Runnable {
             @Override
             public void run() {
                 try {
-                    send(k, request + "\n");
+                    send(k, request + " \n");
                 }catch (IOException ignored){
 
                 }

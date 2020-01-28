@@ -2,6 +2,8 @@ package client;
 
 
 
+import Settings.Settings;
+
 import javax.swing.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -34,8 +36,6 @@ public class ClientLoginGUI {
         registerBtn.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
-               // LoginPanel.setEnabled(false);
-                //System.out.println("clicked");
                 try {
                     registraUtente(nickTB.getText(), new String(pwTB.getPassword()));
                 }catch(IOException ex){
@@ -58,16 +58,16 @@ public class ClientLoginGUI {
         });
     }
 
-
-    private void createUIComponents() {
-        // TODO: place custom component creation code here
-    }
-
-
     public void close() {
         window.dispose();
     }
 
+    /**
+     * Registrazione utente tramite RMI
+     * @param nick
+     * @param pw
+     * @throws IOException
+     */
     public void registraUtente(String nick, String pw) throws IOException {
         String response;
         try {
@@ -79,10 +79,10 @@ public class ClientLoginGUI {
         System.out.print(response);
         String[] tokens=response.split(" ");
 
-        if(tokens[0].equals("NOK")){
+        if(Settings.RESPONSE.NOK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
             JOptionPane.showMessageDialog(window, tokens[1]);
         }
-        else if(tokens[0].equals("OK")){
+        else if(Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
             loginUtente(nick, pw);
         }
         else{
@@ -91,14 +91,21 @@ public class ClientLoginGUI {
 
     }
 
+    /**
+     * Login utente con tcp
+     * @param nick
+     * @param pw
+     * @return
+     * @throws IOException
+     */
     public String loginUtente(String nick, String pw) throws IOException {
         String response=tcp.login(nick, pw, udp.getUdpPort());
         String[] tokens=response.split(" ");
-        if(tokens[0].equals("NOK")){
+        if(Settings.RESPONSE.NOK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
             JOptionPane.showMessageDialog(window, tokens[1]);
             return response;
         }
-        else if(tokens[0].equals("OK")){
+        else if(Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
             udp.setLoggedInfo(nick, tokens[2]);
             synchronized (tcp){
                 tcp.notify();

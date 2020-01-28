@@ -8,7 +8,7 @@
     <properties/>
     <border type="none"/>
     <children>
-      <grid id="c6b0a" binding="Friend" layout-manager="GridLayoutManager" row-count="3" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+      <grid id="c6b0a" binding="Friend" layout-manager="GridLayoutManager" row-count="5" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
         <margin top="0" left="0" bottom="0" right="0"/>
         <constraints>
           <grid row="0" column="2" row-span="1" col-span="1" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
@@ -18,7 +18,7 @@
         <children>
           <scrollpane id="50884" binding="pendingRequest">
             <constraints>
-              <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="6" hsize-policy="0" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+              <grid row="2" column="0" row-span="1" col-span="1" vsize-policy="6" hsize-policy="0" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties>
               <horizontalScrollBarPolicy value="31"/>
@@ -33,6 +33,8 @@
                   <inheritsPopupMenu value="false"/>
                   <maximumSize width="2147483647" height="2147483647"/>
                   <minimumSize width="100" height="200"/>
+                  <name value=""/>
+                  <toolTipText value="Friend Request"/>
                 </properties>
                 <border type="none"/>
                 <children/>
@@ -41,7 +43,7 @@
           </scrollpane>
           <scrollpane id="1b395" binding="friendsScroll">
             <constraints>
-              <grid row="2" column="0" row-span="1" col-span="1" vsize-policy="6" hsize-policy="0" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+              <grid row="4" column="0" row-span="1" col-span="1" vsize-policy="6" hsize-policy="0" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties/>
             <border type="none"/>
@@ -49,7 +51,9 @@
               <grid id="2b15f" binding="friends" layout-manager="GridLayoutManager" row-count="1" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
                 <margin top="0" left="0" bottom="0" right="0"/>
                 <constraints/>
-                <properties/>
+                <properties>
+                  <toolTipText value="Friends"/>
+                </properties>
                 <border type="none"/>
                 <children/>
               </grid>
@@ -81,6 +85,22 @@
               </component>
             </children>
           </grid>
+          <component id="21642" class="javax.swing.JLabel" binding="pendingLB">
+            <constraints>
+              <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+            </constraints>
+            <properties>
+              <text value="Richieste di Amicizia"/>
+            </properties>
+          </component>
+          <component id="36366" class="javax.swing.JLabel" binding="friendsLB">
+            <constraints>
+              <grid row="3" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+            </constraints>
+            <properties>
+              <text value="Amici"/>
+            </properties>
+          </component>
         </children>
       </grid>
       <grid id="ba5f6" binding="Main" layout-manager="FlowLayout" hgap="5" vgap="5" flow-align="1">
@@ -91,7 +111,7 @@
         <border type="none"/>
         <children/>
       </grid>
-      <grid id="e4e57" binding="Menu" layout-manager="GridLayoutManager" row-count="5" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
+      <grid id="e4e57" binding="Menu" layout-manager="GridLayoutManager" row-count="6" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
         <margin top="0" left="0" bottom="0" right="0"/>
         <constraints>
           <grid row="0" column="0" row-span="1" col-span="1" vsize-policy="3" hsize-policy="3" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
@@ -109,7 +129,7 @@
           </component>
           <component id="c2fda" class="javax.swing.JButton" binding="logoutBT">
             <constraints>
-              <grid row="4" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+              <grid row="5" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="3" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties>
               <text value="Logout"/>
@@ -117,20 +137,22 @@
           </component>
           <scrollpane id="7e2ca" binding="Classifica">
             <constraints>
-              <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+              <grid row="2" column="0" row-span="1" col-span="1" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties/>
             <border type="none"/>
             <children>
               <component id="fde25" class="javax.swing.JList" binding="ClassificaList">
                 <constraints/>
-                <properties/>
+                <properties>
+                  <toolTipText value="Leaderboard"/>
+                </properties>
               </component>
             </children>
           </scrollpane>
           <scrollpane id="fb96d" binding="SfideScroll">
             <constraints>
-              <grid row="3" column="0" row-span="1" col-span="1" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
+              <grid row="4" column="0" row-span="1" col-span="1" vsize-policy="7" hsize-policy="7" anchor="0" fill="3" indent="0" use-parent-layout="false"/>
             </constraints>
             <properties/>
             <border type="none"/>
@@ -138,17 +160,30 @@
               <grid id="650a" binding="Sfide" layout-manager="GridLayoutManager" row-count="1" column-count="1" same-size-horizontally="false" same-size-vertically="false" hgap="-1" vgap="-1">
                 <margin top="0" left="0" bottom="0" right="0"/>
                 <constraints/>
-                <properties/>
+                <properties>
+                  <toolTipText value="Challenge Request"/>
+                </properties>
                 <border type="none"/>
                 <children/>
               </grid>
             </children>
           </scrollpane>
-          <hspacer id="f91a">
+          <component id="f3d81" class="javax.swing.JLabel" binding="challengeLB">
             <constraints>
-              <grid row="2" column="0" row-span="1" col-span="1" vsize-policy="1" hsize-policy="6" anchor="0" fill="1" indent="0" use-parent-layout="false"/>
+              <grid row="3" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
             </constraints>
-          </hspacer>
+            <properties>
+              <text value="Richieste di Sfida"/>
+            </properties>
+          </component>
+          <component id="29ddf" class="javax.swing.JLabel" binding="leaderboardLB">
+            <constraints>
+              <grid row="1" column="0" row-span="1" col-span="1" vsize-policy="0" hsize-policy="0" anchor="8" fill="0" indent="0" use-parent-layout="false"/>
+            </constraints>
+            <properties>
+              <text value="Classifica"/>
+            </properties>
+          </component>
         </children>
       </grid>
     </children>

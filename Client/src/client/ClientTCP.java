@@ -293,38 +293,43 @@ public class ClientTCP implements Runnable{
 
     }
 
+    /**
+     * Invia il comando per accettare la sfida e la rimuove dalla lista
+     * @param friend chi voglio accettare
+     * @return risposta del server
+     * @throws IOException
+     */
     public String accettaSfida(String friend) throws IOException{
         String request=Settings.REQUEST.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.ACCETTA;
         send(request);
         synchronized (richiesteSfida){
-
             richiesteSfida.remove(friend);
             richiesteSfida.notify();
         }
         return getResponse();
 
-
     }
 
+    /**
+     * Invia il comando per rifiutare la sfida e la rimuove dalla lista
+     * @param friend chi voglio rifiutare
+     * @throws IOException
+     */
     public void rifiutaSfida(String friend) throws IOException{
         String request=Settings.REQUEST.SFIDA+" "+loggedNick+" "+token+" "+friend+" "+Settings.RQTType.RIFIUTA;
         send(request);
-
         synchronized (richiesteSfida){
-
             richiesteSfida.remove(friend);
             richiesteSfida.notify();
         }
-
-
     }
 
     /*                      TRADUZIONI                              */
 
     /**
-     * Restituisce la nuova parola o il punteggio se la sfida è terminata
-     * @param traduzione
-     * @return
+     * Effettua l'invio della traduzione della parola
+     * @param traduzione la parola tradotta
+     * @return la nuova parola se la sfida non è terminata oppure il punteggio se termina
      */
     public String inviaTraduzione(String traduzione) throws IllegalArgumentException, IOException{
         String request=Settings.REQUEST.PAROLA+" "+loggedNick+" "+token+" "+traduzione;
@@ -353,6 +358,12 @@ public class ClientTCP implements Runnable{
 
     /*                      SFIDE                                   */
 
+    /**
+     * Gestisce i comandi ricevuti per la sfida
+     * @param friend a chi era riferita la sfida
+     * @param type tipo di azione sulla sfida
+     * @param p parola o punteggio
+     */
     private void manageSfida(String friend, String type, String p) {
         switch(Settings.SFIDA.valueOf(type)){
             case ACCETTATA:
@@ -394,6 +405,7 @@ public class ClientTCP implements Runnable{
 
     /**
      * Gestisce la risposta ad un'amicizia inviata (stampa solo info sulla richiesta)
+     * Aggiorna la lista delle amicizie in caso di richiesta accettata e rimuove la richiesta
      * @param friend amico a cui si vuole inviare
      * @param type ENUM AMICIZIA
      */
@@ -430,6 +442,10 @@ public class ClientTCP implements Runnable{
         }
     }
 
+    /**
+     * Effettua il parse del json con le richieste di amicizia aggiornando la lista
+     * @param json stringa JSON contenente le richieste di amicizia
+     */
     private void managePendingFriends(String json) {
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
@@ -450,6 +466,10 @@ public class ClientTCP implements Runnable{
 
     /*                      CLASSIFICA                              */
 
+    /**
+     * Effettua il parse del json con la classifica e aggiorna la lista
+     * @param json json da parsare
+     */
     private void manageClassifica(String json) {
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));
@@ -470,6 +490,10 @@ public class ClientTCP implements Runnable{
 
     /*                      AMICI                                   */
 
+    /**
+     * Effettua il parse del json contenente gli amici e aggiorna la lista
+     * @param json json da parsare
+     */
     private void manageAmici(String json) {
         try {
             JSONArray array=(JSONArray) (new JSONParser().parse(json));

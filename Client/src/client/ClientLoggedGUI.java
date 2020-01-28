@@ -1,5 +1,6 @@
 package client;
 
+import Settings.Settings;
 import client.customComponents.*;
 
 import javax.swing.*;
@@ -19,13 +20,17 @@ public class ClientLoggedGUI {
     private JPanel AddFriendP;
     private JLabel Name;
     private JButton logoutBT;
-    private JList ClassificaList;
+    private JList<String> ClassificaList;
     private JScrollPane Classifica;
     private JPanel LoggedPanel;
     private JPanel pending;
     private JPanel friends;
     private JScrollPane SfideScroll;
     private JPanel Sfide;
+    private JLabel pendingLB;
+    private JLabel friendsLB;
+    private JLabel challengeLB;
+    private JLabel leaderboardLB;
     private ClientTCP tcp;
     private JFrame window;
 
@@ -56,9 +61,9 @@ public class ClientLoggedGUI {
                 try {
                     String response = tcp.aggiungiAmico(addFriendTB.getText());
                     String[] tokens = response.split(" ");
-                    if (tokens[0].equals("OK")) {
+                    if (Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))) {
                         JOptionPane.showMessageDialog(window, tokens[0]);
-                    } else if (tokens[0].equals("NOK")) {
+                    } else if (Settings.RESPONSE.NOK.equals(Settings.RESPONSE.valueOf(tokens[0]))) {
                         JOptionPane.showMessageDialog(window, tokens[1]);
                     }
                 }catch(IOException ex){
@@ -71,10 +76,7 @@ public class ClientLoggedGUI {
         logoutBT.addActionListener(new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent e) {
-
                 tcp.logout();
-
-                //System.exit(1);
                 logout();
             }
         });
@@ -83,38 +85,48 @@ public class ClientLoggedGUI {
 
     }
 
+    /**
+     * Chiude la finestra
+     */
     public void close() {
         window.dispose();
     }
 
+    /**
+     * Effettua l'update della UI
+     */
+    public void updateUI(){
+        LoggedPanel.updateUI();
+    }
+
+    /**
+     * Effettua il logout resettando tcp
+     */
+    private void logout(){
+        synchronized (tcp) {
+            tcp.setLoggedNick(null);
+            tcp.setToken(null);
+            tcp.notify();
+        }
+    }
+
+    /*                      RICHIESTE AMICIZIA                      */
 
     /**
      * Aggiunge alla lista delle richieste ricevute
-     * @param nick
+     * @param friend da chi viene la richiesta
      */
-    public void addPendingFriendTile(String nick){
-        //pendingRequest.add(new FriendRequestTile(nick));
-        //pendingRequest.getViewport().add(new FriendRequestTile(nick), null);
-        //pendingRequest.revalidate();
-
-        //listener per bottone che accetta
+    public void addPendingFriendTile(String friend){
+        //listener bottone che accetta
         ActionListener aListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 try {
-                    tcp.accettaAmico(nick);
+                    tcp.accettaAmico(friend);
                 }catch(IOException ex){
                     JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
                     logout();
                 }
-                /*if(tcp.accettaAmico(nick)){
-                   int index=getPendingTileIndex(nick);
-                    //pending.remove(index);
-
-                    addFriendTile(nick);
-
-                }*/
-
             }
         };
 
@@ -123,7 +135,7 @@ public class ClientLoggedGUI {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 try {
-                    tcp.rifiutaAmico(nick);
+                    tcp.rifiutaAmico(friend);
                 }catch(IOException ex){
                     JOptionPane.showMessageDialog(window, "SERVER DISCONNESSO");
                     logout();
@@ -132,39 +144,37 @@ public class ClientLoggedGUI {
             }
         };
 
-        pending.add(new FriendRequestTile(nick, aListener, dListener));
+        pending.add(new FriendRequestTile(friend, aListener, dListener));
 
 
 
-    }
-
-    public int getPendingTileIndex(String nick){
-        Component[] c=pending.getComponents();
-        for(int i=0; i<c.length; i++){
-            if(((FriendRequestTile)c[i]).getNick().equals(nick))
-                return i;
-        }
-        return -1;
     }
 
     /**
-     * Aggiunge alla lista delle amicizie
-     * @param nick
+     * Pulisce la lista delle richieste
      */
-    public void addFriendTile(String nick){
+    public void clearPending(){
+        pending.removeAll();
+    }
+
+    /*                      AMICI                                   */
+
+    /**
+     * Aggiunge amico alla lista delle amicizie
+     * @param friend amico da inserire
+     */
+    public void addFriendTile(String friend){
 
         //listener per bottone sfida
         ActionListener sListener= new ActionListener() {
             @Override
             public void actionPerformed(ActionEvent actionEvent) {
                 try{
-
-
-                    String[] tokens=tcp.inviaSfida(nick).split(" ");
-                    if(tokens[0].equals("OK")){
+                    String[] tokens=tcp.inviaSfida(friend).split(" ");
+                    if(Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
                         JOptionPane.showMessageDialog(window, tokens[0]);
                     }
-                    else if(tokens[0].equals("NOK")){
+                    else if(Settings.RESPONSE.NOK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
                         JOptionPane.showMessageDialog(window, tokens[1]);
                     }
 
@@ -174,11 +184,23 @@ public class ClientLoggedGUI {
                 }
             }
         };
-        friends.add(new FriendTile(nick, sListener));
-        //friends.updateUI();
+        friends.add(new FriendTile(friend, sListener));
 
     }
 
+    /**
+     * Pulisce la lista amici
+     */
+    public void clearFriend(){
+        friends.removeAll();
+    }
+
+    /*                      SFIDA                                   */
+
+    /**
+     * Aggiunge una richiesta diu sfida
+     * @param friend amico che richiede la sfida
+     */
     public void addSfidaTile(String friend) {
         ActionListener aListener= new ActionListener() {
             @Override
@@ -186,11 +208,11 @@ public class ClientLoggedGUI {
                 try {
 
                     String[] tokens=tcp.accettaSfida(friend).split(" ");
-                    if(tokens[0].equals("OK")){
+                    if(Settings.RESPONSE.OK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
                         preparaSfida(friend);
                         updateUI();
                     }
-                    else if(tokens[0].equals("NOK")){
+                    else if(Settings.RESPONSE.NOK.equals(Settings.RESPONSE.valueOf(tokens[0]))){
                         JOptionPane.showMessageDialog(window, tokens[1]);
                     }
                 }catch(IOException ex){
@@ -213,32 +235,18 @@ public class ClientLoggedGUI {
         Sfide.add(new RichiestaSfidaTile(friend, aListener, rListener));
     }
 
-    public void updateClassifica(List<String> list){
-    System.out.println("List Classifica: "+list.size());
-        ClassificaList.setListData(list.toArray(new String[list.size()]));
-        //ClassificaList.updateUI();
-    }
-
-    public void updateUI(){
-        LoggedPanel.updateUI();
-    }
-
-    public void clearPending(){
-        pending.removeAll();
-    }
-
-    public void clearFriend(){
-        friends.removeAll();
-    }
-
-    public void clearClassifica(){
-        ClassificaList.removeAll();
-    }
-
+    /**
+     * Pulisce le richieste sfida
+     */
     public void clearRichiesteSfida() {
         Sfide.removeAll();
     }
 
+    /**
+     * Inizia la sfida
+     * @param friend sfidante
+     * @param parola parola da tradurre
+     */
     public void initSfida(String friend, String parola) {
         Main.removeAll();
         SfidaTile s=new SfidaTile(friend, parola);
@@ -265,25 +273,44 @@ public class ClientLoggedGUI {
         };
         s.setListener(sListener);
         Main.add(s);
-
     }
 
+    /**
+     * Termina la sfida
+     * @param score punteggio
+     */
     public void endSfida(int score) {
         JOptionPane.showMessageDialog(window, "HAI TOTALIZZATO: "+score+" PUNTI");
         Main.removeAll();
     }
 
+    /**
+     * Prepara l'utente alla sfida mentre si aspetta la parola aggiungendo i componenti grafici
+     * @param friend sfidante
+     */
     public void preparaSfida(String friend) {
         Main.removeAll();
         SfidaTile s=new SfidaTile(friend);
         Main.add(s);
     }
 
-    private void logout(){
-        synchronized (tcp) {
-            tcp.setLoggedNick(null);
-            tcp.setToken(null);
-            tcp.notify();
-        }
+    /*                      CLASSIFICA                              */
+
+    /**
+     * Aggiorna la classifica
+     * @param list lista contenente la classifica ordinata per punteggio
+     */
+    public void updateClassifica(List<String> list){
+        //System.out.println("List Classifica: "+list.size());
+        ClassificaList.setListData(list.toArray(new String[0]));
     }
+
+    /**
+     * Pulisce la classifica
+     */
+    public void clearClassifica(){
+        ClassificaList.removeAll();
+    }
+
+
 }

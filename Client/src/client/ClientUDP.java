@@ -42,17 +42,6 @@ public class ClientUDP implements Runnable{
 
     }
 
-    public void send(String s){
-
-        byte[] sendData=s.getBytes();
-        DatagramPacket sPacket=new DatagramPacket(sendData, sendData.length, IPAddress, Settings.UDPPort);
-        try {
-            socket.send(sPacket);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
     public int getUdpPort(){
         return socket.getLocalPort();
     }
