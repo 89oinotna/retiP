@@ -15,6 +15,12 @@ title __SERVER's Class Diagram__\n
   
 
   namespace exceptions {
+    abstract class exceptions.CustomException {
+    }
+  }
+  
+
+  namespace exceptions {
     class exceptions.FriendshipException {
     }
   }
@@ -93,6 +99,18 @@ title __SERVER's Class Diagram__\n
   
 
   namespace server {
+    class server.Notifier {
+    }
+  }
+  
+
+  namespace server {
+    class server.ReaderTCP {
+    }
+  }
+  
+
+  namespace server {
     class server.Server {
     }
   }
@@ -147,13 +165,25 @@ title __SERVER's Class Diagram__\n
   
 
   namespace server {
-    class server.WorkerTCP {
+    class server.WriterTCP {
     }
   }
   
 
+  exceptions.ChallengeException -up-|> exceptions.CustomException
+  exceptions.FriendshipException -up-|> exceptions.CustomException
+  exceptions.UserAlreadyExists -up-|> exceptions.CustomException
+  exceptions.UserAlreadyInGame -up-|> exceptions.CustomException
+  exceptions.UserAlreadyLogged -up-|> exceptions.CustomException
+  exceptions.UserNotExists -up-|> exceptions.CustomException
+  exceptions.UserNotOnline -up-|> exceptions.CustomException
+  exceptions.WrongCredException -up-|> exceptions.CustomException
   server.Challenge .up.|> java.lang.Runnable
   server.Challenge -up-|> server.IChallenge
+  server.Notifier .up.|> java.lang.Runnable
+  server.ReaderTCP .up.|> java.lang.Runnable
+  server.ReaderTCP o-- server.UDP : udp
+  server.ReaderTCP o-- server.Users : users
   server.Server o-- server.Users : u
   server.Server o-- server.ServerRMI : serverrmi
   server.Server o-- server.ServerTCP : servertcp
@@ -172,9 +202,8 @@ title __SERVER's Class Diagram__\n
   server.User .up.|> server.IUser
   server.User o-- server.Challenge : challenge
   server.Users .up.|> server.IUsers
-  server.WorkerTCP .up.|> java.lang.Runnable
-  server.WorkerTCP o-- server.UDP : udp
-  server.WorkerTCP o-- server.Users : users
+  server.WriterTCP .up.|> java.lang.Runnable
+  server.WriterTCP o-- server.Users : users
 
 
 right footer

@@ -1,6 +1,9 @@
 package client;
 
 
+import client.GUI.ClientLoggedGUI;
+import client.GUI.ClientLoginGUI;
+
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;

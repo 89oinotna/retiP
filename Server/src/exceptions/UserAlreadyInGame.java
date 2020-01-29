@@ -1,4 +1,7 @@
 package exceptions;
 
-public class UserAlreadyInGame extends Exception {
+public class UserAlreadyInGame extends CustomException {
+    public UserAlreadyInGame() {
+        super();
+    }
 }

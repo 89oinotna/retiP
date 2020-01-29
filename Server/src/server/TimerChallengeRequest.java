@@ -6,6 +6,7 @@ import exceptions.UserNotExists;
 import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Si occupa di notificare la scadenza del timer della richiesta di sfida
@@ -18,9 +19,8 @@ public class TimerChallengeRequest extends TimerChallenge {
     private String friend;
 
     //friend è l'amico con la entry nella lista delle challengRequest
-    public TimerChallengeRequest(String nick, String friend, SelectionKey k1, SelectionKey k2, Users users,
-                                 ConcurrentHashMap<SelectionKey, SelectionKey> usingK) {
-        super(usingK);
+    public TimerChallengeRequest(String nick, String friend, SelectionKey k1, SelectionKey k2, Users users, ExecutorService executor) {
+        super(executor);
         this.nick=nick;
         this.friend=friend;
         this.k1 = k1;
@@ -42,8 +42,8 @@ public class TimerChallengeRequest extends TimerChallenge {
         try {
             String nick=((MyAttachment)k2.attachment()).getNick();
             String friend=((MyAttachment)k1.attachment()).getNick();
-            send(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.SCADUTA+"\n");
-        } catch (IOException | UserNotExists e) {
+            executor.submit(new Notifier(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.SCADUTA));
+        } catch (UserNotExists e) {
             e.printStackTrace();
         }
 

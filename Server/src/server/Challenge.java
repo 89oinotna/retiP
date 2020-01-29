@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Challenge extends IChallenge implements Runnable{
@@ -31,7 +32,7 @@ public class Challenge extends IChallenge implements Runnable{
     private static List<String> dict;
     private SelectionKey k1;
     private SelectionKey k2;
-    private ConcurrentHashMap<SelectionKey,SelectionKey> usingK;
+    private ExecutorService executor;  //threadpool a cui aggiungo anche i notifier
     public Challenge(User n1, User n2) {
         users=new ArrayList<>(){
             @Override
@@ -49,6 +50,10 @@ public class Challenge extends IChallenge implements Runnable{
         punteggio=new int[]{0 , 0};
         wordN=new int[]{0, 0};
         this.parole=getParole();
+
+        //Avvio il thread che si occupa della traduzione delle parole
+        Thread cTH=new Thread(this);
+        cTH.start();
 
     }
 
@@ -211,53 +216,22 @@ public class Challenge extends IChallenge implements Runnable{
         }
         MyAttachment ak1=((MyAttachment)k1.attachment());
         MyAttachment ak2=((MyAttachment)k2.attachment());
-        try {
-            send(k1, Settings.RESPONSE.SFIDA + " " + ak1.getToken() +
-                    " " + ak2.getNick() + " " + Settings.SFIDA.INIZIATA + " " + getWord(0) + "\n");
-        }catch (IOException ignored){
-        }
-        try {
-            send(k2, Settings.RESPONSE.SFIDA + " " + ak2.getToken() +
-                    " " + ak1.getNick() + " " + Settings.SFIDA.INIZIATA+" "+getWord(0)+"\n");
-        } catch (IOException ignored) {
-        }
+        executor.submit(new Notifier(k1, Settings.RESPONSE.SFIDA + " " + ak1.getToken() +
+                " " + ak2.getNick() + " " + Settings.SFIDA.INIZIATA + " " + getWord(0)));
+        executor.submit(new Notifier(k2, Settings.RESPONSE.SFIDA + " " + ak2.getToken() +
+                " " + ak1.getNick() + " " + Settings.SFIDA.INIZIATA+" "+getWord(0)));
     }
 
-    public void setKeys(SelectionKey k1, SelectionKey k2, ConcurrentHashMap<SelectionKey,SelectionKey> usingK){
-        this.usingK=usingK;
+    public Challenge setKeys(SelectionKey k1, SelectionKey k2){
         this.k1=k1;
         this.k2=k2;
+        return this;
     }
 
-    /**
-     * Scrive sul channell associato a k
-     *
-     * @param k
-     * @param response
-     * @throws IOException
-     */
-    public void send(SelectionKey k, String response) throws IOException {
-        //todo send scrittura multiplo di BUFFLEN
-        SocketChannel client = (SocketChannel) k.channel();
-        ByteBuffer buf = ByteBuffer.wrap( response.getBytes() );
-        synchronized (usingK) {
-            while(usingK.containsKey(k)){
-                try {
-                    usingK.wait();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-            }
-            usingK.put(k, k);
-        }
-        while(buf.hasRemaining()){
-            client.write(buf);
-        }
-        synchronized (usingK) {
-            usingK.remove(k, k);
-            usingK.notify();
-        }
-
-
+    public Challenge setExecutor(ExecutorService executor){
+        this.executor=executor;
+        return this;
     }
+
+
 }

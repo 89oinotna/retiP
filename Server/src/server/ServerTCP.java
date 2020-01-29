@@ -19,27 +19,25 @@ import java.util.concurrent.Executors;
 /**
  * Classe che implementa la parte TCP del server
  *
- * Viene utilizzato un selector che utilizza dei worker a cui affida la gestione delle richieste
- *
- * Per permettere l'utilizzo dei worker è stata creata una lista contentente le key in uso dagli stessi
- * in modo che due worker non lavorino sulla stessa key
+ * Viene utilizzato un selector reso multithread tramite l'utilizzo di worker di lettura (ReaderTCP) e
+ * scrittura (WriterTCP)
  *
  */
 public class ServerTCP implements Runnable {
     private ServerSocketChannel serverChannel;
     private Selector selector;
     private ExecutorService executor;
+    private ExecutorService notifierExecutor;
     private Users users;
-    private ConcurrentHashMap<SelectionKey, SelectionKey> usingK; // mi serve perchè la select potrebbe restituirmi la stessa key mentre la sto gestendo nel worker
     private final ConcurrentHashMap<String, SelectionKey> keys;
     private UDP udp;
 
-    public ServerTCP(int port, Users _users) {
+    public ServerTCP(int port, Users _users, UDP udp) {
         users = _users;
-        usingK=new ConcurrentHashMap<>();
+        notifierExecutor= Executors.newCachedThreadPool();
         executor= Executors.newCachedThreadPool();
         keys=new ConcurrentHashMap<>();
-        udp=new UDP();
+        this.udp=udp;
         try {
             serverChannel = ServerSocketChannel.open();
             ServerSocket ss = serverChannel.socket(); //prendo la referencee al socket
@@ -69,24 +67,27 @@ public class ServerTCP implements Runnable {
             while (iterator.hasNext()) {
                 SelectionKey k = iterator.next();
                 iterator.remove();
-                try {
-                    if (k.isValid() && k.isAcceptable()) {
-                        accept(k);
-                    }
-                    else if (k.isValid() && k.isReadable()) {
-                        synchronized (usingK) {
-                            if (usingK.putIfAbsent(k, k) == null) {
-                                WorkerTCP wrk = new WorkerTCP(k, users, usingK, keys, udp, executor);
+                synchronized (k) {
+                    try {
+                        if (k.isAcceptable()) {
+                            accept(k);
+                        } else if (k.isReadable()) {
+                                k.interestOps(0);
+                                ReaderTCP wrk = new ReaderTCP(k, users, keys, udp, notifierExecutor);
                                 executor.submit(wrk);
-                            }
-                        }
-                    }
-                }catch(IOException e){
-                    e.printStackTrace();
-                    System.out.println("Disconnected ");
-                    k.cancel();
-                }
 
+
+                        } else if (k.isWritable()) {
+                            k.interestOps(0);
+                            WriterTCP wrk = new WriterTCP(k, keys, users);
+                            executor.submit(wrk);
+                        }
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                        System.out.println("Disconnected ");
+                        k.cancel();
+                    }
+                }
             }
         }
     }

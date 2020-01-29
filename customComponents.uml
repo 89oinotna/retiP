@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Diagram>
+  <ID>JAVA</ID>
+  <OriginalElement>client.customComponents</OriginalElement>
+  <nodes>
+    <node x="0.0" y="165.0">client.customComponents.VerticalFlowLayout</node>
+    <node x="406.0" y="85.0">client.customComponents.SfidaTile</node>
+    <node x="302.0" y="0.0">client.customComponents.CustomTile</node>
+    <node x="168.0" y="85.0">client.customComponents.FriendRequestTile</node>
+    <node x="564.0" y="85.0">client.customComponents.RichiestaSfidaTile</node>
+    <node x="0.0" y="85.0">client.customComponents.FriendTile</node>
+  </nodes>
+  <notes />
+  <edges>
+    <edge source="client.customComponents.FriendTile" target="client.customComponents.CustomTile">
+      <point x="0.0" y="-17.5" />
+      <point x="74.0" y="55.0" />
+      <point x="320.5" y="55.0" />
+      <point x="-55.5" y="17.5" />
+    </edge>
+    <edge source="client.customComponents.SfidaTile" target="client.customComponents.CustomTile">
+      <point x="0.0" y="-17.5" />
+      <point x="475.0" y="65.0" />
+      <point x="394.5" y="65.0" />
+      <point x="18.5" y="17.5" />
+    </edge>
+    <edge source="client.customComponents.FriendRequestTile" target="client.customComponents.CustomTile">
+      <point x="0.0" y="-17.5" />
+      <point x="277.0" y="65.0" />
+      <point x="357.5" y="65.0" />
+      <point x="-18.5" y="17.5" />
+    </edge>
+    <edge source="client.customComponents.RichiestaSfidaTile" target="client.customComponents.CustomTile">
+      <point x="0.0" y="-17.5" />
+      <point x="678.0" y="55.0" />
+      <point x="431.5" y="55.0" />
+      <point x="55.5" y="17.5" />
+    </edge>
+  </edges>
+  <settings layout="Hierarchic Group" zoom="1.0" x="396.0" y="146.0" />
+  <SelectedNodes>
+    <node>client.customComponents.VerticalFlowLayout</node>
+  </SelectedNodes>
+  <Categories />
+  <SCOPE>All</SCOPE>
+  <VISIBILITY>private</VISIBILITY>
+</Diagram>
+

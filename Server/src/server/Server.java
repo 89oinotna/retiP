@@ -1,6 +1,7 @@
 package server;
 
 
+import Settings.Settings;
 import org.json.simple.JSONArray;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
@@ -22,12 +23,12 @@ public class Server {
     private ServerRMI serverrmi;
     private ServerTCP servertcp;
     private List<String> dict;
-    private static final int n=200;
+    private UDP serverudp;
 
     public Server() {
 
         //Leggi il dizionario e settalo per le sfide
-        dict= new ArrayList<>(n);
+        dict= new ArrayList<>();
         new File("dict.txt");
         try (BufferedReader reader = new BufferedReader(new FileReader("dict.txt"))) {
             String parola;
@@ -55,8 +56,9 @@ public class Server {
             u=new Users();
         }
 
-        serverrmi = new ServerRMI(8082, u);
-        servertcp=new ServerTCP(8080, u);
+        serverrmi = new ServerRMI(Settings.RMIPort, u);
+        serverudp=new UDP(Settings.UDPPort);
+        servertcp=new ServerTCP(Settings.TCPPort, u, serverudp);
         Thread tcpTH=new Thread(servertcp);
         tcpTH.start();
     }

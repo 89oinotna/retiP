@@ -1,6 +1,6 @@
 package exceptions;
 
-public class FriendshipException extends Exception {
+public class FriendshipException extends CustomException {
     public FriendshipException(String message) {
         super(message);
     }

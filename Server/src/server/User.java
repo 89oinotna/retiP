@@ -8,6 +8,9 @@ import org.json.simple.JSONObject;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Rappresenta un utente
+ */
 public class User implements IUser {
 
     private String nickname;
@@ -117,7 +120,7 @@ public class User implements IUser {
     }
 
     public boolean removeFriend(String friend) { return (friends.remove(friend)) != null; }
-
+    
     public boolean addPending(String friend) throws FriendshipException {
 
         if(pendingFriend.putIfAbsent(friend, friend)==null)

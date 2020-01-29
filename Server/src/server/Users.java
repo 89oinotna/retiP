@@ -195,7 +195,7 @@ public class Users implements IUsers {
      * @throws ChallengeException   se non esiste la richiesta di sfida fatta da friend a nick
      * @throws UserNotExists        se almeno uno dei due non esiste
      */
-    public IChallenge sfida(String nick, String friend) throws UserAlreadyInGame, UserNotOnline, ChallengeException, UserNotExists {
+    public Challenge sfida(String nick, String friend) throws UserAlreadyInGame, UserNotOnline, ChallengeException, UserNotExists {
        Challenge c;
        synchronized (users) {
            if (isLogged(nick) && isLogged(friend)) {

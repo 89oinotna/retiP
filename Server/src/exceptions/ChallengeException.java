@@ -1,6 +1,6 @@
 package exceptions;
 
-public class ChallengeException extends Exception {
+public class ChallengeException extends CustomException {
     public ChallengeException(String message) {
         super(message);
     }

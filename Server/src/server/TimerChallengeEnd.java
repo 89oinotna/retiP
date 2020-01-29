@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.channels.SelectionKey;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Si occupa di notificare la fine della sfida alla scadenza del timer e
@@ -19,9 +20,8 @@ public class TimerChallengeEnd extends TimerChallenge {
     private final Challenge c;
     private ConcurrentHashMap<String, SelectionKey> keys;
     TimerChallengeEnd(SelectionKey k1, SelectionKey k2, Challenge c, Users users,
-                      ConcurrentHashMap<String, SelectionKey> keys,
-                      ConcurrentHashMap<SelectionKey, SelectionKey> usingK) {
-        super(usingK);
+                      ConcurrentHashMap<String, SelectionKey> keys, ExecutorService executor) {
+        super(executor);
         this.keys=keys;
         this.k1 = k1;
         this.k2 = k2;
@@ -33,22 +33,22 @@ public class TimerChallengeEnd extends TimerChallenge {
     public void run() {
 
 
-        synchronized (c) {
-            if (!c.endChallenge()) return;
-        }
+
+        if (!c.endChallenge()) return;
+
         //se non è terminata scatta il timer
         try {
             String nick=((MyAttachment)k1.attachment()).getNick();
             String friend=((MyAttachment)k2.attachment()).getNick();
-            send(k1, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)+"\n");
-        } catch (IOException | UserNotExists e) {
+            executor.submit(new Notifier(k1, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)));
+        } catch (UserNotExists e) {
             e.printStackTrace();
         }
         try {
             String nick=((MyAttachment)k2.attachment()).getNick();
             String friend=((MyAttachment)k1.attachment()).getNick();
-            send(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)+"\n");
-        } catch (IOException | UserNotExists e) {
+            executor.submit(new Notifier(k2, Settings.RESPONSE.SFIDA+" "+users.getToken(nick)+" "+friend+" "+Settings.SFIDA.TERMINATA+" "+c.getScore(nick)));
+        } catch (UserNotExists e) {
             e.printStackTrace();
         }
         try {
@@ -73,11 +73,7 @@ public class TimerChallengeEnd extends TimerChallenge {
             String response=Settings.GetType.CLASSIFICA+" "+ users.getToken(f)+" "+ users.mostraClassifica(f).toJSONString();
             SelectionKey k= keys.get(f);
             if(k==null) continue ;
-            try {
-                send(k, response + "\n");
-            }catch (IOException e){
-
-            }
+            executor.submit(new Notifier(k, response));
         }
 
     }

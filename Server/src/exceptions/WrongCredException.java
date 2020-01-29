@@ -1,6 +1,6 @@
 package exceptions;
 
-public class WrongCredException extends RuntimeException{
+public class WrongCredException extends CustomException{
     public WrongCredException() {
         super();
     }

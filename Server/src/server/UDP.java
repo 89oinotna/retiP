@@ -17,9 +17,9 @@ import java.util.Iterator;
 public class UDP {
     private DatagramSocket udp;
     private InetAddress address;
-    public UDP(){
+    public UDP(int port){
         try {
-            udp = new DatagramSocket(8081);
+            udp = new DatagramSocket(port);
             address = InetAddress.getByName(Settings.HOST_NAME);
 
         }catch (SocketException | UnknownHostException e) {
