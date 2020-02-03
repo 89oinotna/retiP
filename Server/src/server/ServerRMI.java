@@ -21,6 +21,7 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
             LocateRegistry.createRegistry(port);
             Registry r = LocateRegistry.getRegistry(port);
             r.rebind("GAME-SERVER", stub);
+
             System.out.println("server.Server ready");
         } catch (RemoteException e) {
             e.printStackTrace();
@@ -37,6 +38,7 @@ public class ServerRMI extends RemoteServer implements IServerRMI {
             return "NOK "+e.toString().split(":")[0];
         }
     }
+
 
 
 }

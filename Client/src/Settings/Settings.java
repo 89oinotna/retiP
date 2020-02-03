@@ -42,15 +42,16 @@ public class Settings {
      *  Le risposte asincrone no
      *
      *  FORMATO RISPOSTE:   OK AMICIZIA TOKEN FRIEND TYPE
-     *                      OK SFIDA TOKEN NICK TYPE
-     *                      OK PAROLA TOKEN NEXTWORD
+     *                      OK SFIDA TOKEN FRIEND TYPE
+     *                      OK PAROLA TOKEN NEXTWORD/PUNTEGGIO
      *                      OK TOKEN
-     *                      NOK TOKEN ECCEZIONE
+     *                      NOK ECCEZIONE TOKEN
      *
      *  RISPOSTE INOLTRATE: AMICI TOKEN JSON
      *                      CLASSIFICA TOKEN JSON
      *                      PENDING TOKEN JSON
-     *                      SFIDA NICK TOKEN (DA)FRIEND
+     *                      AMICIZIA TOKEN FRIEND TYPE
+     *                      SFIDA TOKEN FRIEND TYPE PUNTEGGIO(Se TYPE=TERMINATA)
      */
     public enum RESPONSE{
         LOGIN,

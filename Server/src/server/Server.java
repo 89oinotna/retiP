@@ -96,6 +96,7 @@ public class Server {
             s.save();
         }
         s.save();
+
         System.exit(0);
     }
 

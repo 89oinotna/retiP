@@ -37,14 +37,15 @@ public class ClientTCP implements Runnable{
     private SocketChannel socketChannel;
     private ByteBuffer byteBuffer;
     private Scanner scanner;
+    private String token;
+    private StringBuilder lastResponse;
+    private String loggedNick;
+    //Oggetti su cui notificare alla GUI
+    private List<String> sfida;
+    private ConcurrentHashMap<String, String> richiesteSfida;
     private List<String> pendingFriendsList;
     private List<String> friendsList;
     private List<String> classificaList;
-    private String token;
-    private ConcurrentHashMap<String, String> richiesteSfida;
-    private StringBuilder lastResponse;
-    private String loggedNick;
-    private List<String> sfida;
 
     public ClientTCP(List<String> sfida,
                      List<String> pendingFriendsList,
@@ -245,9 +246,7 @@ public class ClientTCP implements Runnable{
             synchronized (friendsList){
                 synchronized (pendingFriendsList){
                     pendingFriendsList.remove(friend);
-
                     pendingFriendsList.notify();
-
                 }
                 friendsList.add(friend);
                 friendsList.notify();

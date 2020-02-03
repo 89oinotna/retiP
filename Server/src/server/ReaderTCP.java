@@ -41,7 +41,10 @@ public class ReaderTCP implements Runnable {
         try {
             String command = read();
             if(command.length()>0) {
-                System.out.println("REQUEST: " + command);
+                SocketChannel client = (SocketChannel) k.channel();
+
+                System.out.println("FROM: " + ((SocketChannel) k.channel()).getRemoteAddress());
+                System.out.print("REQUEST: " + command);
                 String response = null;
                 try {
                     response = manageCommand(command);
@@ -199,7 +202,7 @@ public class ReaderTCP implements Runnable {
             else //portei accettarla quando richiedo la sfida a qualcuno che me l'ha già chiesta
                 throw new ChallengeException();
 
-        } catch (UserNotExists | UserNotOnline | ChallengeException e){ //cancello la richiesta
+        } catch (UserNotExists | UserNotOnline e ){ //cancello la richiesta
             users.removePendingChallenge(nick, friend);
             throw e;
         }

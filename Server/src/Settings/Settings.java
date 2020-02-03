@@ -6,7 +6,6 @@ public class Settings {
     public static final int TCPPort=8080;
     public static final int TCPBUFFLEN=1024;
     public static final String HOST_NAME="localhost";
-    //todo fix parola e sfida
 
     /**                     COMANDI
      *
@@ -42,15 +41,16 @@ public class Settings {
      *  Le risposte asincrone no
      *
      *  FORMATO RISPOSTE:   OK AMICIZIA TOKEN FRIEND TYPE
-     *                      OK SFIDA TOKEN NICK TYPE
-     *                      OK PAROLA TOKEN NEXTWORD
+     *                      OK SFIDA TOKEN FRIEND TYPE
+     *                      OK PAROLA TOKEN NEXTWORD/PUNTEGGIO
      *                      OK TOKEN
-     *                      NOK TOKEN ECCEZIONE
+     *                      NOK ECCEZIONE TOKEN
      *
      *  RISPOSTE INOLTRATE: AMICI TOKEN JSON
      *                      CLASSIFICA TOKEN JSON
      *                      PENDING TOKEN JSON
-     *                      SFIDA NICK TOKEN (DA)FRIEND
+     *                      AMICIZIA TOKEN FRIEND TYPE
+     *                      SFIDA TOKEN FRIEND TYPE PUNTEGGIO(Se TYPE=TERMINATA)
      */
     public enum RESPONSE{
         LOGIN,
@@ -69,17 +69,13 @@ public class Settings {
         RIFIUTATA
     }
 
-    /**         CHALLENGE SETTINGS
+    /**         SFIDA
      *
      */
     public static final int k=10; //numero di parole utilizzate per la sfida
+    public static int TIMEOUT=10000; //timeout per il termine di una richiesta di sfida
+    public static final long timer=60000; //timer per il termine della sfida
 
-
-
-    /**
-     *          SFIDA
-     */
-    public static int TIMEOUT=10000; //ms
     public enum SFIDA {
         RICHIESTA,
         ACCETTATA,
@@ -88,7 +84,7 @@ public class Settings {
         TERMINATA,
         SCADUTA
     }
-    public static final long timer=60000;
+
 
     public static final int X=3; //Traduzione corretta assegna X punti
     public static final int Y=1; //Traduzione sbagliata toglie Y punti

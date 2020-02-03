@@ -91,19 +91,19 @@ public class User implements IUser {
         this.score = score;
     }
 
-    public int addScore(int i) {
+    public synchronized int addScore(int i) {
         return score+=i;
     }
 
     public boolean isLogged() { return logged;  }
 
-    public void login(String token) throws UserAlreadyLogged{
+    public synchronized void login(String token) throws UserAlreadyLogged{
         if(!logged)logged = true;
         else throw new UserAlreadyLogged();
         this.token=token;
     }
 
-    public void logout() {
+    public synchronized void logout() {
         logged = false;
         token="";
     }
@@ -114,21 +114,21 @@ public class User implements IUser {
         return friends.get(friend)!=null;
     }
 
-    public void addFriend(String friend) {
+    public synchronized void addFriend(String friend) {
         friends.putIfAbsent(friend, friend);
         removePending(friend);
     }
 
-    public boolean removeFriend(String friend) { return (friends.remove(friend)) != null; }
-    
-    public boolean addPending(String friend) throws FriendshipException {
+    public synchronized boolean removeFriend(String friend) { return (friends.remove(friend)) != null; }
+
+    public synchronized boolean addPending(String friend) throws FriendshipException {
 
         if(pendingFriend.putIfAbsent(friend, friend)==null)
             return true;
         throw new FriendshipException("FriendshipExists");
     }
 
-    public void removePending(String friend){ pendingFriend.remove(friend); }
+    public synchronized void removePending(String friend){ pendingFriend.remove(friend); }
 
     public List<String> getFriends() {
         return new ArrayList<String>(friends.keySet());
@@ -152,7 +152,7 @@ public class User implements IUser {
      * @param friend from
      * @return true se non era già presente, false altrimenti
      */
-    public boolean addChallengeRequest(String friend){
+    public synchronized boolean addChallengeRequest(String friend){
         return challengeRequest.putIfAbsent(friend, friend)==null;
     }
 
@@ -161,7 +161,7 @@ public class User implements IUser {
      * @param friend from
      * @return true se era presente ed è stato rimosso, false altrimenti
      */
-    public boolean removeChallengeRequest(String friend) {
+    public synchronized boolean removeChallengeRequest(String friend) {
         return challengeRequest.remove(friend)!=null;
     }
 

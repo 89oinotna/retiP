@@ -109,4 +109,6 @@ public class ServerTCP implements Runnable {
             SelectionKey cK = client.register(selector, SelectionKey.OP_READ, att);
         }catch(NullPointerException ignore){}
     }
+
+
 }
