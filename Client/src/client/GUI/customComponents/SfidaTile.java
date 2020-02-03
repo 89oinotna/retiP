@@ -21,13 +21,6 @@ public class SfidaTile extends JPanel implements CustomTile {
         this.add(this.parola);
         this.add(this.traduzione);
         this.add(this.sendBT);
-
-        this.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(Color.red),
-                this.getBorder()));
-
-
-
     }
 
     public SfidaTile(String friend){

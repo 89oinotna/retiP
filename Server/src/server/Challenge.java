@@ -15,9 +15,7 @@ import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -33,6 +31,9 @@ public class Challenge extends IChallenge implements Runnable{
     private SelectionKey k1;
     private SelectionKey k2;
     private ExecutorService executor;  //threadpool a cui aggiungo anche i notifier
+    private ConcurrentHashMap<String, SelectionKey> keys;
+    private Timer t;
+    private TimerTask tt;
     public Challenge(User n1, User n2) {
         users=new ArrayList<>(){
             @Override
@@ -51,9 +52,9 @@ public class Challenge extends IChallenge implements Runnable{
         wordN=new int[]{0, 0};
         this.parole=getParole();
 
-        //Avvio il thread che si occupa della traduzione delle parole
-        Thread cTH=new Thread(this);
-        cTH.start();
+        t = new Timer();
+
+
 
     }
 
@@ -220,12 +221,21 @@ public class Challenge extends IChallenge implements Runnable{
                 " " + ak2.getNick() + " " + Settings.SFIDA.INIZIATA + " " + getWord(0)));
         executor.submit(new Notifier(k2, Settings.RESPONSE.SFIDA + " " + ak2.getToken() +
                 " " + ak1.getNick() + " " + Settings.SFIDA.INIZIATA+" "+getWord(0)));
+        t.schedule(tt, Settings.timer);
     }
 
     public Challenge setKeys(SelectionKey k1, SelectionKey k2){
         this.k1=k1;
         this.k2=k2;
         return this;
+    }
+
+    /**
+     * Setta il task per il timer di termine della sfida
+     * @param tt TaskTimer
+     */
+    public void setTimer(TimerTask tt){
+        this.tt = tt;
     }
 
     public Challenge setExecutor(ExecutorService executor){

@@ -477,7 +477,7 @@ public class ClientTCP implements Runnable{
                 for (Object s : array) {
                     //gui.addPendingFriendTile((String) s);
                     JSONObject amicoJSON=(JSONObject)s;
-                    String amico=amicoJSON.get("nick").toString() + amicoJSON.get("score").toString();
+                    String amico=amicoJSON.get("score").toString()+" "+amicoJSON.get("nick").toString() ;
                     classificaList.add(amico);
                 }
                 classificaList.notify();

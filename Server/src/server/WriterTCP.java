@@ -31,7 +31,9 @@ public class WriterTCP implements Runnable {
         try {
             String response=((MyAttachment)k.attachment()).getResponse();
             if (response != null) {
-                System.out.println("Response: " + response);
+                SocketChannel client = (SocketChannel) k.channel();
+                System.out.println("TO: " + ((SocketChannel) k.channel()).getRemoteAddress());
+                System.out.println("RESPONSE: " + response);
                 send(response + "\n");
             }
             synchronized (k) {

@@ -40,23 +40,6 @@ public class Client {
     }
 
     public static void main(String[] args){
-        /**      /"\
-                |\./|
-                |   |
-                |>*<|
-                |   |
-             /'\|   |/'\
-         /'\|   |   |   |
-        |   |   |   |   |\
-        |   |   |   |   |  \
-        | *   *   *   * |>  >
-        |                  /
-         |               /
-          |            /
-           \          |
-            |         |
-         */
-
         while(true) {
             Client c = new Client();
             c.cloginGUI = new ClientLoginGUI( c.rmi, c.tcp, c.udp);

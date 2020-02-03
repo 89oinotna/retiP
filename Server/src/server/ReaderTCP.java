@@ -222,9 +222,7 @@ public class ReaderTCP implements Runnable {
         Challenge c = users.sfida(nick, friend);
         c.setKeys(k, keys.get(friend)).setExecutor(executor);
         //schedulo il timer di chiusura sfida
-        Timer t = new Timer();
-        TimerTask tt = new TimerChallengeEnd(keys.get(nick), keys.get(friend), c, users, keys, executor);
-        t.schedule(tt, Settings.timer);
+
         try{
             inoltraSfida(nick, friend, Settings.SFIDA.ACCETTATA);
 
@@ -232,6 +230,10 @@ public class ReaderTCP implements Runnable {
             c.endChallenge();
             throw e;
         }
+        c.setTimer(new TimerChallengeEnd(keys.get(nick), keys.get(friend), c, users, keys, executor));
+        //Avvio il thread che si occupa della traduzione delle parole
+        Thread cTH=new Thread(c);
+        cTH.start();
         return Settings.RESPONSE.OK+" "+Settings.RESPONSE.SFIDA + " " + token + " " + friend + " " + Settings.SFIDA.ACCETTATA;
 
     }
