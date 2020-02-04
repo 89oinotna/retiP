@@ -1,2 +1,0 @@
-# retiP
-reti progetto
